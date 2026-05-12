@@ -1,29 +1,54 @@
-import React from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 
 import AuthNavigator from "./AuthNavigator";
 import MainTabs from "./MainTabs";
-
-export type RootStackParamList = {
-  Auth: undefined;
-  Main: undefined;
-};
-
-const Stack = createNativeStackNavigator<RootStackParamList>();
+import { isLoggedIn } from "../services/authService";
 
 export default function AppNavigator() {
-  return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="Auth"
-        screenOptions={{
-          headerShown: false,
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+
+  useEffect(() => {
+    async function checkSession() {
+      const hasToken = await isLoggedIn();
+      setAuthenticated(hasToken);
+      setCheckingSession(false);
+    }
+
+    checkSession();
+  }, []);
+
+  if (checkingSession) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#061225",
+          alignItems: "center",
+          justifyContent: "center",
         }}
       >
-        <Stack.Screen name="Auth" component={AuthNavigator} />
-        <Stack.Screen name="Main" component={MainTabs} />
-      </Stack.Navigator>
-    </NavigationContainer>
+        <ActivityIndicator color="#FFFFFF" />
+      </View>
+    );
+  }
+
+  if (!authenticated) {
+    return (
+      <AuthNavigator
+        onAuthComplete={() => {
+          setAuthenticated(true);
+        }}
+      />
+    );
+  }
+
+  return (
+    <MainTabs
+      onLogout={() => {
+        setAuthenticated(false);
+      }}
+    />
   );
 }

@@ -1,30 +1,95 @@
-import { mockAuth, mockUser } from "../data/mockAuth";
 import { LoginResult } from "../types/auth";
+import { apiRequest } from "./apiClient";
+import {
+  saveSessionToken,
+  getSessionToken,
+  clearSessionToken,
+  clearAuthStorage,
+} from "./secureStorage";
 
-export async function mockLogin(
+type LoginApiResponse = {
+  success?: boolean;
+  accessToken?: string;
+  expiresIn?: string;
+  message?: string;
+  error?: string;
+  user?: {
+    console_Idn?: number;
+    userID?: string;
+    menuIndex?: number;
+  };
+};
+
+function getErrorMessage(error: any) {
+  if (error?.message === "Network request failed") {
+    return "Cannot connect to server. Please check API connection or network.";
+  }
+
+  return error?.message || "Login failed. Please try again.";
+}
+
+export async function loginUser(
   username: string,
   password: string
 ): Promise<LoginResult> {
-  await new Promise((resolve) => setTimeout(resolve, 600));
+  try {
+    const cleanUsername = username.trim();
 
-  const isValid =
-    username.trim().toLowerCase() === mockAuth.username &&
-    password === mockAuth.password;
+    await clearSessionToken();
 
-  if (!isValid) {
+    const data: LoginApiResponse = await apiRequest("/api/login", {
+      method: "POST",
+      requireAuth: false,
+      body: {
+        username: cleanUsername,
+        password,
+      },
+    });
+
+    if (!data.success) {
+      return {
+        success: false,
+        message: data.message || data.error || "Invalid username or password.",
+      };
+    }
+
+    if (!data.accessToken) {
+      return {
+        success: false,
+        message: "Login success but access token was not returned.",
+      };
+    }
+
+    await saveSessionToken(data.accessToken);
+
+    return {
+      success: true,
+      user: {
+        id: String(data.user?.console_Idn ?? ""),
+        username: data.user?.userID ?? cleanUsername,
+        name: data.user?.userID ?? cleanUsername,
+        role: "User",
+        console_Idn: data.user?.console_Idn,
+        menuIndex: data.user?.menuIndex,
+      },
+    };
+  } catch (error: any) {
     return {
       success: false,
-      message: "Invalid username or password.",
+      message: getErrorMessage(error),
     };
   }
-
-  return {
-    success: true,
-    user: mockUser,
-  };
 }
 
-export async function mockVerifyOtp(otp: string): Promise<boolean> {
-  await new Promise((resolve) => setTimeout(resolve, 400));
-  return otp === mockAuth.otp;
+export async function isLoggedIn() {
+  const token = await getSessionToken();
+  return !!token;
+}
+
+export async function logoutUser() {
+  await clearSessionToken();
+}
+
+export async function forceClearAuth() {
+  await clearAuthStorage();
 }

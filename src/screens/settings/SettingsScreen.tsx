@@ -25,6 +25,7 @@ import {
   getBiometricEnabled,
   setBiometricEnabled,
 } from "../../services/secureStorage";
+import { getAppVersion, getAppBuildNumber } from "../../utils/appInfo";
 import { colors } from "../../theme/colors";
 
 type SettingsScreenProps = {
@@ -48,6 +49,12 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
 
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
+
+  const appVersion = getAppVersion();
+  const buildNumber = getAppBuildNumber();
+  const appVersionLabel = buildNumber
+    ? `v${appVersion} (${buildNumber})`
+    : `v${appVersion}`;
 
   const [dialog, setDialog] = useState<DialogState>({
     visible: false,
@@ -209,8 +216,8 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
           <StaticSettingRow
             icon={Server}
             title="App Version"
-            description="EMA OPS Mobile prototype version"
-            status="1.0.0"
+            description="EMA OPS Mobile application build"
+            status={appVersionLabel}
             tone="blue"
           />
         </View>
@@ -318,13 +325,25 @@ function ModernDialog({
   onPrimary?: () => void | Promise<void>;
 }) {
   const iconColor =
-    type === "success" ? colors.green : type === "danger" ? colors.red : colors.blue;
+    type === "success"
+      ? colors.green
+      : type === "danger"
+        ? colors.red
+        : colors.blue;
 
   const iconBg =
-    type === "success" ? "#EBF8F1" : type === "danger" ? "#FFF0F0" : "#EAF1FF";
+    type === "success"
+      ? "#EBF8F1"
+      : type === "danger"
+        ? "#FFF0F0"
+        : "#EAF1FF";
 
   const primaryBg =
-    type === "danger" ? colors.red : type === "success" ? colors.green : colors.blue;
+    type === "danger"
+      ? colors.red
+      : type === "success"
+        ? colors.green
+        : colors.blue;
 
   async function handlePrimary() {
     if (onPrimary) {
@@ -513,7 +532,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 12,
   },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(7, 17, 32, 0.62)",

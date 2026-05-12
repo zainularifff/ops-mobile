@@ -19,7 +19,6 @@ import {
   clearAuthStorage,
   getBiometricEnabled,
   getSessionToken,
-  saveSessionToken,
   setBiometricEnabled,
 } from "./src/services/secureStorage";
 
@@ -85,7 +84,12 @@ export default function App() {
 
   async function completeLogin(biometricEnabled: boolean) {
     try {
-      await saveSessionToken("mock-access-token");
+      /**
+       * Token sebenar sudah disimpan dalam loginUser()
+       * selepas POST /api/login berjaya.
+       *
+       * Jadi dekat sini kita hanya simpan biometric setting.
+       */
       await setBiometricEnabled(biometricEnabled);
       setStep("dashboard");
     } catch (error) {
@@ -97,7 +101,7 @@ export default function App() {
     try {
       await clearAuthStorage();
     } catch (error) {
-      // Ignore storage error for prototype flow
+      // Ignore storage error
     }
 
     setStep("login");
@@ -107,7 +111,7 @@ export default function App() {
     try {
       await clearAuthStorage();
     } catch (error) {
-      // Ignore storage error for prototype flow
+      // Ignore storage error
     }
 
     setStep("login");
@@ -124,7 +128,20 @@ export default function App() {
     }
 
     if (step === "login") {
-      return <LoginScreen onLoginSuccess={() => setStep("twoFactor")} />;
+      return (
+        <LoginScreen
+          onLoginSuccess={() => {
+            /**
+             * Backend belum ada OTP endpoint.
+             * Jadi selepas login berjaya, terus pergi enable biometric.
+             *
+             * Kalau nanti backend dah ada OTP,
+             * tukar line ni kepada: setStep("twoFactor")
+             */
+            setStep("enableBiometric");
+          }}
+        />
+      );
     }
 
     if (step === "twoFactor") {

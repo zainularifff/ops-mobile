@@ -2,7 +2,7 @@
   "expo": {
     "name": "ops-mobile",
     "slug": "ops-mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,27 +13,51 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Allow OPS Mobile to use Face ID for secure app unlock."
+      }
     },
     "android": {
+      "package": "com.zainul1595.opsmobile",
+      "versionCode": 2,
+      "usesCleartextTraffic": true,
+      "softwareKeyboardLayoutMode": "resize",
+      "edgeToEdgeEnabled": false,
+      "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.zainul1595.opsmobile"
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow OPS Mobile to use Face ID for secure app unlock."
+        }
+      ]
     ],
     "extra": {
       "eas": {
         "projectId": "7cd7294a-919e-49ee-ad94-f714c7036209"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7cd7294a-919e-49ee-ad94-f714c7036209"
     }
   }
 }

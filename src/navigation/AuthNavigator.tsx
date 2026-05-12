@@ -14,6 +14,10 @@ export type AuthStackParamList = {
   BiometricUnlock: undefined;
 };
 
+type AuthNavigatorProps = {
+  onAuthComplete: () => void;
+};
+
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 function LoginRoute() {
@@ -21,7 +25,13 @@ function LoginRoute() {
 
   return (
     <LoginScreen
-      onLoginSuccess={() => navigation.navigate("TwoFactor")}
+      onLoginSuccess={() => {
+        /**
+         * Backend belum ada OTP endpoint.
+         * Jadi skip TwoFactor dulu.
+         */
+        navigation.replace("EnableBiometric");
+      }}
     />
   );
 }
@@ -31,39 +41,50 @@ function TwoFactorRoute() {
 
   return (
     <TwoFactorScreen
-      onVerifySuccess={() => navigation.navigate("EnableBiometric")}
-      onBack={() => navigation.goBack()}
+      onVerifySuccess={() => {
+        navigation.replace("EnableBiometric");
+      }}
+      onBack={() => {
+        navigation.goBack();
+      }}
     />
   );
 }
 
-function EnableBiometricRoute() {
-  const navigation = useNavigation<any>();
-
+function EnableBiometricRoute({
+  onAuthComplete,
+}: {
+  onAuthComplete: () => void;
+}) {
   return (
     <EnableBiometricScreen
-      onComplete={() => navigation.navigate("BiometricUnlock")}
+      onComplete={() => {
+        onAuthComplete();
+      }}
     />
   );
 }
 
-function BiometricUnlockRoute() {
+function BiometricUnlockRoute({
+  onAuthComplete,
+}: {
+  onAuthComplete: () => void;
+}) {
   const navigation = useNavigation<any>();
 
   return (
     <BiometricUnlockScreen
       onUnlockSuccess={() => {
-        navigation.getParent()?.reset({
-          index: 0,
-          routes: [{ name: "Main" }],
-        });
+        onAuthComplete();
       }}
-      onUsePassword={() => navigation.navigate("Login")}
+      onUsePassword={() => {
+        navigation.replace("Login");
+      }}
     />
   );
 }
 
-export default function AuthNavigator() {
+export default function AuthNavigator({ onAuthComplete }: AuthNavigatorProps) {
   return (
     <Stack.Navigator
       initialRouteName="Login"
@@ -72,9 +93,16 @@ export default function AuthNavigator() {
       }}
     >
       <Stack.Screen name="Login" component={LoginRoute} />
+
       <Stack.Screen name="TwoFactor" component={TwoFactorRoute} />
-      <Stack.Screen name="EnableBiometric" component={EnableBiometricRoute} />
-      <Stack.Screen name="BiometricUnlock" component={BiometricUnlockRoute} />
+
+      <Stack.Screen name="EnableBiometric">
+        {() => <EnableBiometricRoute onAuthComplete={onAuthComplete} />}
+      </Stack.Screen>
+
+      <Stack.Screen name="BiometricUnlock">
+        {() => <BiometricUnlockRoute onAuthComplete={onAuthComplete} />}
+      </Stack.Screen>
     </Stack.Navigator>
   );
 }

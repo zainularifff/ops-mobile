@@ -14,7 +14,7 @@ import {
   ShieldCheck,
 } from "lucide-react-native";
 import AppButton from "../../components/AppButton";
-import { mockVerifyOtp } from "../../services/authService";
+import { verifyOtp  } from "../../services/authService";
 import { colors } from "../../theme/colors";
 
 type Props = {
@@ -29,7 +29,7 @@ export default function TwoFactorScreen({ onVerifySuccess, onBack }: Props) {
   async function handleVerify() {
     setLoading(true);
 
-    const isValid = await mockVerifyOtp(otp);
+    const isValid = await verifyOtp (otp);
 
     setLoading(false);
 

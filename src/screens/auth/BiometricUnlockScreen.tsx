@@ -7,7 +7,10 @@ import {
   UserRound,
 } from "lucide-react-native";
 import AppButton from "../../components/AppButton";
-import { authenticateWithBiometric } from "../../services/biometricService";
+import {
+  authenticateWithBiometric,
+  isBiometricAvailable,
+} from "../../services/biometricService";
 import { colors } from "../../theme/colors";
 
 type Props = {
@@ -21,8 +24,23 @@ export default function BiometricUnlockScreen({
 }: Props) {
   const [loading, setLoading] = useState(false);
 
+
   async function handleUnlock() {
     setLoading(true);
+
+    const available = await isBiometricAvailable();
+
+    if (!available) {
+      setLoading(false);
+
+      Alert.alert(
+        "Biometric Not Available",
+        "Biometric authentication is not available or not enrolled on this device. Please login using password."
+      );
+
+      onUsePassword();
+      return;
+    }
 
     const success = await authenticateWithBiometric("Unlock OPS Mobile");
 

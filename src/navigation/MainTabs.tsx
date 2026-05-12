@@ -1,10 +1,11 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  LayoutDashboard,
+  Activity,
   ClipboardList,
   FileText,
-  LayoutDashboard,
-  MonitorCog,
   Settings,
 } from "lucide-react-native";
 
@@ -13,7 +14,6 @@ import OperationsStack from "./OperationsStack";
 import WorklistStack from "./WorklistStack";
 import ReportsStack from "./ReportsStack";
 import SettingsScreen from "../screens/settings/SettingsScreen";
-import { colors } from "../theme/colors";
 
 export type MainTabParamList = {
   Overview: undefined;
@@ -30,22 +30,41 @@ type MainTabsProps = {
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabs({ onLogout }: MainTabsProps) {
+  const insets = useSafeAreaInsets();
+
+  const bottomSpace = Math.max(insets.bottom, 12);
+
   return (
     <Tab.Navigator
+      initialRouteName="Overview"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.blue,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarActiveTintColor: "#2563EB",
+        tabBarInactiveTintColor: "#64748B",
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          height: 72,
+          height: 62 + bottomSpace,
           paddingTop: 8,
-          paddingBottom: 10,
-          backgroundColor: colors.white,
-          borderTopColor: colors.border,
+          paddingBottom: bottomSpace,
+          backgroundColor: "#FFFFFF",
+          borderTopWidth: 1,
+          borderTopColor: "#E2E8F0",
+          elevation: 12,
+          shadowColor: "#000000",
+          shadowOffset: {
+            width: 0,
+            height: -4,
+          },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 2,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "800",
+          fontSize: 11,
+          fontWeight: "700",
+          marginTop: 2,
         },
       }}
     >
@@ -53,8 +72,9 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
         name="Overview"
         component={OverviewStack}
         options={{
-          tabBarIcon: ({ color }) => (
-            <LayoutDashboard size={22} color={color} strokeWidth={2.6} />
+          tabBarLabel: "Overview",
+          tabBarIcon: ({ color, size }) => (
+            <LayoutDashboard size={size} color={color} strokeWidth={2.4} />
           ),
         }}
       />
@@ -63,8 +83,9 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
         name="Operations"
         component={OperationsStack}
         options={{
-          tabBarIcon: ({ color }) => (
-            <MonitorCog size={22} color={color} strokeWidth={2.6} />
+          tabBarLabel: "Operations",
+          tabBarIcon: ({ color, size }) => (
+            <Activity size={size} color={color} strokeWidth={2.4} />
           ),
         }}
       />
@@ -73,8 +94,9 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
         name="Worklist"
         component={WorklistStack}
         options={{
-          tabBarIcon: ({ color }) => (
-            <ClipboardList size={22} color={color} strokeWidth={2.6} />
+          tabBarLabel: "Worklist",
+          tabBarIcon: ({ color, size }) => (
+            <ClipboardList size={size} color={color} strokeWidth={2.4} />
           ),
         }}
       />
@@ -83,8 +105,9 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
         name="Reports"
         component={ReportsStack}
         options={{
-          tabBarIcon: ({ color }) => (
-            <FileText size={22} color={color} strokeWidth={2.6} />
+          tabBarLabel: "Reports",
+          tabBarIcon: ({ color, size }) => (
+            <FileText size={size} color={color} strokeWidth={2.4} />
           ),
         }}
       />
@@ -92,8 +115,9 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
       <Tab.Screen
         name="Settings"
         options={{
-          tabBarIcon: ({ color }) => (
-            <Settings size={22} color={color} strokeWidth={2.6} />
+          tabBarLabel: "Settings",
+          tabBarIcon: ({ color, size }) => (
+            <Settings size={size} color={color} strokeWidth={2.4} />
           ),
         }}
       >
