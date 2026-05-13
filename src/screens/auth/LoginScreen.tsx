@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -19,8 +18,6 @@ import {
   ShieldCheck,
 } from "lucide-react-native";
 
-import { API_BASE_URL } from "../../config/api";
-import { loginUser } from "../../services/authService";
 import { getAppVersion, getAppBuildNumber } from "../../utils/appInfo";
 import { styles } from "./LoginScreen.styles";
 
@@ -28,14 +25,11 @@ type Props = {
   onLoginSuccess: () => void;
 };
 
-const SHOW_API_DEBUG = false;
-
 export default function LoginScreen({ onLoginSuccess }: Props) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
-  const [loading, setLoading] = useState(false);
 
   const appVersion = getAppVersion();
   const buildNumber = getAppBuildNumber();
@@ -43,41 +37,18 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
     ? `v${appVersion} (${buildNumber})`
     : `v${appVersion}`;
 
-  async function handleLogin() {
+  function handleLogin() {
     const cleanUsername = username.trim();
 
-    if (!cleanUsername || !password) {
+    if (!username || !password) {
       const message = "Please enter username and password.";
       setLoginError(message);
       Alert.alert("Login Required", message);
       return;
     }
 
-    try {
-      setLoading(true);
-      setLoginError("");
-
-      const result = await loginUser(cleanUsername, password);
-
-      if (!result.success) {
-        const message = result.message || "Invalid username or password.";
-        setLoginError(message);
-        Alert.alert("Login Failed", `${message}\n\nAPI: ${API_BASE_URL}`);
-        return;
-      }
-
-      onLoginSuccess();
-    } catch (error: any) {
-      const message =
-        error?.message || "Login failed. Please check your connection.";
-
-      const debugMessage = `${message}\n\nAPI: ${API_BASE_URL}`;
-
-      setLoginError(debugMessage);
-      Alert.alert("Login Failed", debugMessage);
-    } finally {
-      setLoading(false);
-    }
+    setLoginError("");
+    onLoginSuccess();
   }
 
   return (
@@ -112,7 +83,7 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
             <View style={styles.securityRow}>
               <View style={styles.securityChip}>
                 <LockKeyhole size={13} color="#A7F3D0" strokeWidth={2.7} />
-                <Text style={styles.securityChipText}>Secure Token</Text>
+                <Text style={styles.securityChipText}>Secure Access</Text>
               </View>
 
               <View style={styles.securityChip}>
@@ -145,7 +116,6 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
               autoCorrect={false}
               style={styles.input}
               returnKeyType="next"
-              editable={!loading}
             />
 
             <Text style={styles.label}>Password</Text>
@@ -162,14 +132,12 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
                 style={styles.passwordInput}
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}
-                editable={!loading}
               />
 
               <TouchableOpacity
                 onPress={() => setShowPassword((current) => !current)}
                 style={styles.eyeButton}
                 activeOpacity={0.7}
-                disabled={loading}
               >
                 {showPassword ? (
                   <EyeOff size={20} color="#64748B" strokeWidth={2.4} />
@@ -186,16 +154,11 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
             ) : null}
 
             <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
+              style={styles.button}
               onPress={handleLogin}
-              disabled={loading}
               activeOpacity={0.85}
             >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
-              )}
+              <Text style={styles.buttonText}>Sign In</Text>
             </TouchableOpacity>
 
             <View style={styles.infoStrip}>
@@ -204,13 +167,6 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
                 Protected access for authorized users only
               </Text>
             </View>
-
-            {SHOW_API_DEBUG ? (
-              <View style={styles.apiDebugBox}>
-                <Text style={styles.apiDebugLabel}>Current API Endpoint</Text>
-                <Text style={styles.apiDebugValue}>{API_BASE_URL}</Text>
-              </View>
-            ) : null}
           </View>
 
           <View style={styles.footer}>

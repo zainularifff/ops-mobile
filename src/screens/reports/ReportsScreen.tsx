@@ -2,13 +2,12 @@ import React, { useMemo, useState } from "react";
 import {
   Modal,
   ScrollView,
-  StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Activity,
   Archive,
@@ -28,6 +27,12 @@ import {
 
 import StatusPill from "../../components/StatusPill";
 import { colors } from "../../theme/colors";
+
+import {
+  reportIconStyle,
+  reportIdStyle,
+  styles,
+} from "./ReportsScreen.styles";
 
 type ReportCategory =
   | "all"
@@ -139,7 +144,6 @@ const reports = [
 
 export default function ReportsScreen() {
   const navigation = useNavigation<any>();
-  const insets = useSafeAreaInsets();
 
   const [activeFilter, setActiveFilter] = useState<ReportCategory>("all");
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -163,143 +167,155 @@ export default function ReportsScreen() {
 
   return (
     <>
-      <ScrollView
-        style={styles.page}
-        contentContainerStyle={[
-          styles.container,
-          { paddingTop: insets.top + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>EMA OPS MOBILE</Text>
-          <Text style={styles.title}>Reports</Text>
-          <Text style={styles.subtitle}>
-            View generated report summaries and report catalogue.
-          </Text>
-        </View>
-
-        <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
-            <View style={styles.heroIcon}>
-              <FileText size={26} color={colors.white} strokeWidth={2.7} />
-            </View>
-
-            <StatusPill label="Summary View" tone="blue" />
-          </View>
-
-          <Text style={styles.heroTitle}>Operational Reports</Text>
-          <Text style={styles.heroDesc}>
-            Mobile report access is designed for quick summary review. Full
-            report generation and detailed export remain in the main EMA web
-            system.
-          </Text>
-
-          <View style={styles.heroMetricRow}>
-            <View style={styles.heroMetric}>
-              <Text style={styles.heroValue}>{reports.length}</Text>
-              <Text style={styles.heroMetricLabel}>Report Types</Text>
-            </View>
-
-            <View style={styles.heroDivider} />
-
-            <View style={styles.heroMetric}>
-              <Text style={styles.heroValue}>2</Text>
-              <Text style={styles.heroMetricLabel}>Need Review</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.filterHeader}>
-          <View style={styles.filterTitleWrap}>
-            <Filter size={15} color={colors.blue} strokeWidth={2.7} />
-            <Text style={styles.filterTitle}>Report Category</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={styles.dropdownButton}
-          activeOpacity={0.85}
-          onPress={() => setDropdownVisible(true)}
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <ScrollView
+          style={styles.page}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <View>
-            <Text style={styles.dropdownLabel}>Selected category</Text>
-            <Text style={styles.dropdownValue}>{activeFilterLabel}</Text>
+          <View style={styles.header}>
+            <Text style={styles.eyebrow}>EMA OPS MOBILE</Text>
+            <Text style={styles.title}>Reports</Text>
+            <Text style={styles.subtitle}>
+              View generated report summaries and report catalogue.
+            </Text>
           </View>
 
-          <View style={styles.dropdownIconWrap}>
-            <ChevronDown size={18} color={colors.blue} strokeWidth={2.7} />
+          <View style={styles.heroCard}>
+            <View style={styles.heroTop}>
+              <View style={styles.heroIcon}>
+                <FileText size={26} color={colors.white} strokeWidth={2.7} />
+              </View>
+
+              <StatusPill label="Summary View" tone="blue" />
+            </View>
+
+            <Text style={styles.heroTitle}>Operational Reports</Text>
+            <Text style={styles.heroDesc}>
+              Mobile report access is designed for quick summary review. Full
+              report generation and detailed export remain in the main EMA web
+              system.
+            </Text>
+
+            <View style={styles.heroMetricRow}>
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroValue}>{reports.length}</Text>
+                <Text style={styles.heroMetricLabel}>Report Types</Text>
+              </View>
+
+              <View style={styles.heroDivider} />
+
+              <View style={styles.heroMetric}>
+                <Text style={styles.heroValue}>2</Text>
+                <Text style={styles.heroMetricLabel}>Need Review</Text>
+              </View>
+            </View>
           </View>
-        </TouchableOpacity>
 
-        <View style={styles.resultSummary}>
-          <Text style={styles.resultText}>
-            Showing {filteredReports.length} of {reports.length} reports
-          </Text>
-        </View>
+          <View style={styles.filterHeader}>
+            <View style={styles.filterTitleWrap}>
+              <Filter size={15} color={colors.blue} strokeWidth={2.7} />
+              <Text style={styles.filterTitle}>Report Category</Text>
+            </View>
+          </View>
 
-        <View style={styles.reportList}>
-          {filteredReports.map((report) => (
-            <TouchableOpacity
-              key={report.id}
-              activeOpacity={0.85}
-              style={styles.reportCard}
-              onPress={() => openReport(report)}
-            >
-              <View style={styles.reportTop}>
-                <View
-                  style={[
-                    styles.reportIcon,
-                    { backgroundColor: `${getReportColor(report.category)}18` },
-                  ]}
+          <TouchableOpacity
+            style={styles.dropdownButton}
+            activeOpacity={0.85}
+            onPress={() => setDropdownVisible(true)}
+          >
+            <View>
+              <Text style={styles.dropdownLabel}>Selected category</Text>
+              <Text style={styles.dropdownValue}>{activeFilterLabel}</Text>
+            </View>
+
+            <View style={styles.dropdownIconWrap}>
+              <ChevronDown size={18} color={colors.blue} strokeWidth={2.7} />
+            </View>
+          </TouchableOpacity>
+
+          <View style={styles.resultSummary}>
+            <Text style={styles.resultText}>
+              Showing {filteredReports.length} of {reports.length} reports
+            </Text>
+          </View>
+
+          <View style={styles.reportList}>
+            {filteredReports.map((report) => {
+              const reportColor = getReportColor(report.category);
+
+              return (
+                <TouchableOpacity
+                  key={report.id}
+                  activeOpacity={0.85}
+                  style={styles.reportCard}
+                  onPress={() => openReport(report)}
                 >
-                  <ReportIcon
-                    category={report.category}
-                    color={getReportColor(report.category)}
-                  />
-                </View>
-
-                <View style={styles.reportTextWrap}>
-                  <View style={styles.reportIdRow}>
-                    <Text
-                      style={[
-                        styles.reportId,
-                        { color: getReportColor(report.category) },
-                      ]}
+                  <View style={styles.reportTop}>
+                    <View
+                      style={[styles.reportIcon, reportIconStyle(reportColor)]}
                     >
-                      {report.id}
-                    </Text>
+                      <ReportIcon
+                        category={report.category}
+                        color={reportColor}
+                      />
+                    </View>
 
-                    
+                    <View style={styles.reportTextWrap}>
+                      <View style={styles.reportIdRow}>
+                        <Text
+                          style={[
+                            styles.reportId,
+                            reportIdStyle(reportColor),
+                          ]}
+                        >
+                          {report.id}
+                        </Text>
+
+                        <StatusPill
+                          label={report.status}
+                          tone={report.tone as any}
+                        />
+                      </View>
+
+                      <Text style={styles.reportTitle}>{report.title}</Text>
+                      <Text style={styles.reportDesc}>
+                        {report.description}
+                      </Text>
+                    </View>
                   </View>
 
-                  <Text style={styles.reportTitle}>{report.title}</Text>
-                  <Text style={styles.reportDesc}>{report.description}</Text>
-                </View>
-              </View>
+                  <View style={styles.reportMetaBox}>
+                    <MetaItem label="Frequency" value={report.frequency} />
+                    <MetaItem label="Pages" value={`${report.pages} pages`} />
+                    <MetaItem label="Generated" value={report.lastGenerated} />
+                  </View>
 
-              <View style={styles.reportMetaBox}>
-                <MetaItem label="Frequency" value={report.frequency} />
-                <MetaItem label="Pages" value={`${report.pages} pages`} />
-                <MetaItem label="Generated" value={report.lastGenerated} />
-              </View>
+                  <View style={styles.reportFooter}>
+                    <View style={styles.generatedWrap}>
+                      <CalendarClock
+                        size={13}
+                        color={colors.muted}
+                        strokeWidth={2.6}
+                      />
+                      <Text style={styles.generatedText}>
+                        Tap to view summary
+                      </Text>
+                    </View>
 
-              <View style={styles.reportFooter}>
-                <View style={styles.generatedWrap}>
-                  <CalendarClock
-                    size={13}
-                    color={colors.muted}
-                    strokeWidth={2.6}
-                  />
-                  <Text style={styles.generatedText}>Tap to view summary</Text>
-                </View>
-
-                <ChevronRight size={16} color={colors.muted} strokeWidth={2.7} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
+                    <ChevronRight
+                      size={16}
+                      color={colors.muted}
+                      strokeWidth={2.7}
+                    />
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
 
       <Modal visible={dropdownVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -350,7 +366,9 @@ export default function ReportsScreen() {
                       </Text>
                     </View>
 
-                    {active ? <StatusPill label="Selected" tone="blue" /> : null}
+                    {active ? (
+                      <StatusPill label="Selected" tone="blue" />
+                    ) : null}
                   </TouchableOpacity>
                 );
               })}
@@ -402,6 +420,7 @@ function getReportColor(category: string) {
   if (category === "software") return colors.amber;
   if (category === "asset") return colors.green;
   if (category === "geo") return colors.red;
+
   return colors.blue;
 }
 
@@ -414,6 +433,7 @@ function getFilterDescription(category: ReportCategory) {
   if (category === "software") return "Software compliance and security reports";
   if (category === "asset") return "Asset lifecycle and aging reports";
   if (category === "geo") return "Location coverage and accuracy reports";
+
   return "Report category";
 }
 
@@ -425,311 +445,3 @@ function MetaItem({ label, value }: any) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    paddingHorizontal: 18,
-    paddingBottom: 110,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  eyebrow: {
-    color: colors.blue,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 25,
-    fontWeight: "900",
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  heroCard: {
-    backgroundColor: colors.navy,
-    borderRadius: 28,
-    padding: 20,
-    marginBottom: 16,
-  },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  heroIcon: {
-    width: 54,
-    height: 54,
-    borderRadius: 19,
-    backgroundColor: colors.blue,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroTitle: {
-    color: colors.white,
-    fontSize: 22,
-    fontWeight: "900",
-    marginTop: 18,
-  },
-  heroDesc: {
-    color: "#AFC0D6",
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 7,
-  },
-  heroMetricRow: {
-    marginTop: 18,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.12)",
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  heroMetric: {
-    flex: 1,
-  },
-  heroValue: {
-    color: colors.white,
-    fontSize: 24,
-    fontWeight: "900",
-  },
-  heroMetricLabel: {
-    color: "#8FA3BC",
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  heroDivider: {
-    width: 1,
-    height: 38,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    marginHorizontal: 16,
-  },
-  filterHeader: {
-    marginBottom: 9,
-  },
-  filterTitleWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  filterTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-    marginLeft: 6,
-  },
-  dropdownButton: {
-    backgroundColor: colors.white,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  dropdownLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    marginBottom: 3,
-  },
-  dropdownValue: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  dropdownIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    backgroundColor: "#EAF1FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  resultSummary: {
-    marginBottom: 12,
-  },
-  resultText: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "800",
-  },
-  reportList: {
-    gap: 12,
-  },
-  reportCard: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 15,
-  },
-  reportTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-  reportIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  reportTextWrap: {
-    flex: 1,
-  },
-  reportIdRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    marginBottom: 4,
-  },
-  reportId: {
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  reportTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-    lineHeight: 18,
-  },
-  reportDesc: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  reportMetaBox: {
-    backgroundColor: colors.background,
-    borderRadius: 18,
-    padding: 12,
-    marginTop: 14,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  metaItem: {
-    flex: 1,
-  },
-  metaLabel: {
-    color: colors.muted,
-    fontSize: 9,
-    fontWeight: "800",
-  },
-  metaValue: {
-    color: colors.text,
-    fontSize: 10,
-    fontWeight: "900",
-    marginTop: 3,
-  },
-  reportFooter: {
-    marginTop: 13,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  generatedWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  generatedText: {
-    color: colors.textSoft,
-    fontSize: 10,
-    fontWeight: "700",
-    marginLeft: 5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(7, 17, 32, 0.62)",
-    justifyContent: "flex-end",
-  },
-  dropdownModal: {
-    backgroundColor: colors.white,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 28,
-    maxHeight: "82%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  modalTitle: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  modalSubtitle: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  optionList: {
-    gap: 10,
-  },
-  optionRow: {
-    backgroundColor: colors.background,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  optionRowActive: {
-    backgroundColor: "#EAF1FF",
-    borderColor: "#BFD7FF",
-  },
-  optionTextWrap: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  optionText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  optionTextActive: {
-    color: colors.blue,
-  },
-  optionSubtext: {
-    color: colors.textSoft,
-    fontSize: 10,
-    fontWeight: "700",
-    marginTop: 3,
-    lineHeight: 14,
-  },
-});
