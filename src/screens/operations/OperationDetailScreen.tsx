@@ -16,7 +16,7 @@ import { colors } from "../../theme/colors";
 import {
   operationModules,
   OperationModuleKey,
-} from "../../data/operations";
+} from "../../config/operationModules";
 
 import {
   softBackgroundStyle,
