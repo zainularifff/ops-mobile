@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "../config/api";
+import { API_BASE_URL, API_TIMEOUT_MS } from "../config/api";
 import { clearSessionToken, getSessionToken } from "./secureStorage";
 
 type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -41,6 +41,14 @@ async function readJsonSafely(response: Response) {
   }
 }
 
+function buildNetworkErrorMessage(error: any) {
+  if (error?.name === "AbortError") {
+    return `Connection timed out. Please ensure the backend is running and reachable at ${API_BASE_URL}.`;
+  }
+
+  return `Cannot connect to server at ${API_BASE_URL}. Please check backend service, network, firewall, and Android emulator/device access.`;
+}
+
 export async function apiRequest<T = any>(
   endpoint: string,
   options: ApiRequestOptions = {}
@@ -60,11 +68,28 @@ export async function apiRequest<T = any>(
     }
   }
 
-  const response = await fetch(buildApiUrl(endpoint), {
-    method,
-    headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  });
+  const url = buildApiUrl(endpoint);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal,
+    });
+  } catch (error: any) {
+    throw new ApiError(buildNetworkErrorMessage(error), 0, {
+      endpoint,
+      baseUrl: API_BASE_URL,
+      originalError: error?.message || String(error),
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const payload = await readJsonSafely(response);
 
