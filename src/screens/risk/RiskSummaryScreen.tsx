@@ -1,5 +1,13 @@
-import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -13,49 +21,74 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import { useOperationsSummary } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
-import { dashboardSummary } from "../../data/mockDashboard";
-
-const riskDrivers = [
-  {
-    title: "Stale devices",
-    value: 42,
-    desc: "No update for more than 7 days",
-    icon: WifiOff,
-    color: colors.red,
-  },
-  {
-    title: "SLA risk tickets",
-    value: 18,
-    desc: "Tickets near escalation threshold",
-    icon: Ticket,
-    color: colors.purple,
-  },
-  {
-    title: "Unauthorized software",
-    value: 19,
-    desc: "Pending review by operation/security team",
-    icon: FileWarning,
-    color: colors.amber,
-  },
-  {
-    title: "Aging assets",
-    value: 31,
-    desc: "Potential replacement planning required",
-    icon: Clock3,
-    color: colors.blue,
-  },
-];
+import { formatNumber } from "../../utils/formatters";
 
 export default function RiskSummaryScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  const { summary, loading, refreshing, error, reloadSummary } =
+    useOperationsSummary();
+
+  const notReporting = Math.max(
+    summary.offlineDevices || summary.totalEndpoints - summary.activeDevices,
+    0
+  );
+
+  const riskDrivers = useMemo(
+    () => [
+      {
+        title: "High risk exceptions",
+        value: summary.highRiskExceptions,
+        desc: "Live critical risk / exception count from dashboard",
+        icon: AlertTriangle,
+        color: colors.red,
+      },
+      {
+        title: "Not reporting devices",
+        value: notReporting,
+        desc: "Endpoints not currently reporting",
+        icon: WifiOff,
+        color: colors.red,
+      },
+      {
+        title: "Open tickets",
+        value: summary.openTickets,
+        desc: "Support workload that may require follow-up",
+        icon: Ticket,
+        color: colors.purple,
+      },
+      {
+        title: "Software / asset exposure",
+        value: 0,
+        desc: "Not returned by current mobile summary API yet",
+        icon: FileWarning,
+        color: colors.amber,
+      },
+      {
+        title: "Lifecycle watch",
+        value: 0,
+        desc: "Not returned by current mobile summary API yet",
+        icon: Clock3,
+        color: colors.blue,
+      },
+    ],
+    [notReporting, summary.highRiskExceptions, summary.openTickets]
+  );
+
+  function handleRefresh() {
+    reloadSummary({ silent: true });
+  }
 
   return (
     <ScrollView
       style={styles.page}
       contentContainerStyle={[styles.container, { paddingTop: insets.top + 24 }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
     >
       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <ArrowLeft size={20} color={colors.text} strokeWidth={2.7} />
@@ -66,9 +99,18 @@ export default function RiskSummaryScreen() {
         <Text style={styles.eyebrow}>RISK DRILLDOWN</Text>
         <Text style={styles.title}>High Risk Overview</Text>
         <Text style={styles.subtitle}>
-          Mobile summary of risk drivers that require quick attention.
+          Mobile summary of live risk drivers that require quick attention.
         </Text>
       </View>
+
+      {loading ? <ActivityIndicator size="small" color={colors.red} /> : null}
+
+      {error ? (
+        <View style={styles.notePanel}>
+          <Text style={[styles.noteTitle, { color: colors.red }]}>Live data unavailable</Text>
+          <Text style={styles.noteText}>{error}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.heroCard}>
         <View style={styles.heroIcon}>
@@ -77,19 +119,22 @@ export default function RiskSummaryScreen() {
 
         <Text style={styles.heroTitle}>High Risk Items</Text>
         <Text style={styles.heroDesc}>
-          Risk count is based on selected operational exception categories in this prototype.
+          Risk count is loaded from the EMA dashboard API instead of the old
+          prototype values.
         </Text>
 
         <View style={styles.heroMetricRow}>
           <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>{dashboardSummary.highRiskExceptions}</Text>
+            <Text style={styles.heroMetricValue}>
+              {formatNumber(summary.highRiskExceptions)}
+            </Text>
             <Text style={styles.heroMetricLabel}>High Risk</Text>
           </View>
 
           <View style={styles.heroDivider} />
 
           <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>4</Text>
+            <Text style={styles.heroMetricValue}>{riskDrivers.length}</Text>
             <Text style={styles.heroMetricLabel}>Risk Drivers</Text>
           </View>
         </View>
@@ -100,7 +145,7 @@ export default function RiskSummaryScreen() {
           const Icon = item.icon;
           return (
             <View key={item.title} style={[styles.driverRow, index === riskDrivers.length - 1 && styles.lastRow]}>
-              <View style={[styles.driverIcon, { backgroundColor: `${item.color}18` }]}>
+              <View style={[styles.driverIcon, { backgroundColor: `${item.color}18` }]}> 
                 <Icon size={18} color={item.color} strokeWidth={2.7} />
               </View>
 
@@ -110,7 +155,7 @@ export default function RiskSummaryScreen() {
               </View>
 
               <View style={styles.driverRight}>
-                <Text style={styles.driverValue}>{item.value}</Text>
+                <Text style={styles.driverValue}>{formatNumber(item.value)}</Text>
                 <StatusPill label="Review" tone={item.color === colors.red ? "red" : "amber"} />
               </View>
             </View>
@@ -195,7 +240,7 @@ const styles = StyleSheet.create({
   driverDesc: { color: colors.textSoft, fontSize: 11, fontWeight: "700", marginTop: 3 },
   driverRight: { alignItems: "flex-end", gap: 6 },
   driverValue: { color: colors.text, fontSize: 18, fontWeight: "900" },
-  notePanel: { backgroundColor: colors.white, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border },
+  notePanel: { backgroundColor: colors.white, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
   noteTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
   noteText: { color: colors.textSoft, fontSize: 12, fontWeight: "700", lineHeight: 18, marginTop: 5 },
 });
