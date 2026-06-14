@@ -7,120 +7,177 @@ import Svg, {
   G,
   LinearGradient as SvgGradient,
   Path,
+  RadialGradient,
   Rect,
   Stop,
 } from "react-native-svg";
 
 export type EndpointVisualKind = "managed" | "online" | "offline" | "stale";
 
-export default function EndpointVisual({ kind, color }: { kind: EndpointVisualKind; color: string }) {
+type VisualPalette = {
+  primary: string;
+  secondary: string;
+  light: string;
+  glow: string;
+};
+
+const palettes: Record<EndpointVisualKind, VisualPalette> = {
+  managed: {
+    primary: "#4F6BFF",
+    secondary: "#A9B8FF",
+    light: "#EEF2FF",
+    glow: "#DDE6FF",
+  },
+  online: {
+    primary: "#10A66B",
+    secondary: "#73E0B4",
+    light: "#EAFBF3",
+    glow: "#D5F7E7",
+  },
+  offline: {
+    primary: "#E84A5F",
+    secondary: "#FF9AAA",
+    light: "#FFF0F3",
+    glow: "#FFE0E7",
+  },
+  stale: {
+    primary: "#E49A22",
+    secondary: "#FFD58A",
+    light: "#FFF7E8",
+    glow: "#FFE9BD",
+  },
+};
+
+export default function EndpointVisual({ kind }: { kind: EndpointVisualKind; color?: string }) {
+  const palette = palettes[kind] || palettes.managed;
+
   return (
     <View style={styles.frame}>
-      {kind === "online" ? (
-        <OnlineImage color={color} />
-      ) : kind === "offline" ? (
-        <OfflineImage color={color} />
-      ) : kind === "stale" ? (
-        <StaleImage color={color} />
-      ) : (
-        <ManagedImage color={color} />
-      )}
+      <EnterpriseArtwork kind={kind} palette={palette} />
     </View>
   );
 }
 
-function ImageShell({ color, children }: { color: string; children: React.ReactNode }) {
+function EnterpriseArtwork({ kind, palette }: { kind: EndpointVisualKind; palette: VisualPalette }) {
+  const isOnline = kind === "online";
+  const isOffline = kind === "offline";
+  const isStale = kind === "stale";
+
   return (
-    <Svg width="102" height="102" viewBox="0 0 102 102">
+    <Svg width="104" height="104" viewBox="0 0 104 104">
       <Defs>
-        <SvgGradient id="shellBg" x1="12" y1="6" x2="92" y2="98" gradientUnits="userSpaceOnUse">
+        <SvgGradient id="panelBg" x1="8" y1="5" x2="98" y2="102" gradientUnits="userSpaceOnUse">
           <Stop offset="0" stopColor="#FFFFFF" />
-          <Stop offset="1" stopColor={color} stopOpacity="0.16" />
+          <Stop offset="0.45" stopColor={palette.light} />
+          <Stop offset="1" stopColor="#FFFFFF" />
         </SvgGradient>
-        <SvgGradient id="whiteCard" x1="22" y1="18" x2="75" y2="82" gradientUnits="userSpaceOnUse">
-          <Stop offset="0" stopColor="#FFFFFF" />
-          <Stop offset="1" stopColor="#F4F7FF" />
+        <SvgGradient id="ribbonA" x1="18" y1="16" x2="86" y2="88" gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.95" />
+          <Stop offset="0.45" stopColor={palette.secondary} stopOpacity="0.95" />
+          <Stop offset="1" stopColor={palette.primary} stopOpacity="0.95" />
         </SvgGradient>
+        <SvgGradient id="ribbonB" x1="86" y1="18" x2="20" y2="92" gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor={palette.primary} stopOpacity="0.88" />
+          <Stop offset="0.55" stopColor={palette.secondary} stopOpacity="0.7" />
+          <Stop offset="1" stopColor="#FFFFFF" stopOpacity="0.85" />
+        </SvgGradient>
+        <SvgGradient id="glass" x1="20" y1="20" x2="82" y2="82" gradientUnits="userSpaceOnUse">
+          <Stop offset="0" stopColor="#FFFFFF" stopOpacity="0.98" />
+          <Stop offset="1" stopColor={palette.glow} stopOpacity="0.82" />
+        </SvgGradient>
+        <RadialGradient id="halo" cx="50%" cy="45%" r="58%">
+          <Stop offset="0" stopColor={palette.secondary} stopOpacity="0.36" />
+          <Stop offset="1" stopColor={palette.primary} stopOpacity="0.02" />
+        </RadialGradient>
       </Defs>
-      <Rect x="4" y="4" width="94" height="94" rx="28" fill="url(#shellBg)" />
-      <Circle cx="75" cy="22" r="25" fill={color} opacity="0.10" />
-      <Circle cx="24" cy="78" r="18" fill={color} opacity="0.12" />
-      <Ellipse cx="51" cy="88" rx="30" ry="7" fill="#111827" opacity="0.09" />
-      {children}
+
+      <Rect x="4" y="4" width="96" height="96" rx="27" fill="url(#panelBg)" />
+      <Circle cx="70" cy="25" r="28" fill="url(#halo)" />
+      <Circle cx="27" cy="76" r="24" fill={palette.glow} opacity="0.75" />
+      <Ellipse cx="52" cy="88" rx="31" ry="7" fill="#111827" opacity="0.07" />
+
+      <G opacity={isOffline ? 0.9 : 1}>
+        <Path
+          d="M23 68 C34 42 55 30 80 25"
+          fill="none"
+          stroke="url(#ribbonA)"
+          strokeWidth="16"
+          strokeLinecap="round"
+          opacity="0.88"
+        />
+        <Path
+          d="M22 70 C39 77 58 74 82 58"
+          fill="none"
+          stroke="url(#ribbonB)"
+          strokeWidth="15"
+          strokeLinecap="round"
+          opacity="0.82"
+        />
+        <Path
+          d="M29 42 C48 22 70 34 76 52 C82 72 52 83 32 60"
+          fill="none"
+          stroke="#FFFFFF"
+          strokeWidth="7"
+          strokeLinecap="round"
+          opacity="0.74"
+        />
+      </G>
+
+      <G>
+        <Circle cx="54" cy="52" r="21" fill="url(#glass)" opacity="0.96" />
+        <Circle cx="54" cy="52" r="20" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.85" />
+        <Circle cx="54" cy="52" r="10" fill={palette.primary} opacity={isOnline ? 0.92 : 0.78} />
+        <Circle cx="50" cy="48" r="4" fill="#FFFFFF" opacity="0.88" />
+      </G>
+
+      {isOnline ? (
+        <G>
+          <Circle cx="54" cy="52" r="31" fill="none" stroke={palette.primary} strokeWidth="2" opacity="0.36" />
+          <Circle cx="54" cy="52" r="39" fill="none" stroke={palette.primary} strokeWidth="1.5" opacity="0.18" />
+          <Circle cx="82" cy="38" r="4.5" fill={palette.primary} opacity="0.9" />
+          <Circle cx="28" cy="65" r="3.5" fill={palette.primary} opacity="0.5" />
+        </G>
+      ) : null}
+
+      {isOffline ? (
+        <G>
+          <Path d="M26 28 L78 80" stroke={palette.primary} strokeWidth="6" strokeLinecap="round" opacity="0.75" />
+          <Path d="M26 28 L78 80" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" opacity="0.9" />
+          <Circle cx="26" cy="78" r="5" fill={palette.primary} opacity="0.82" />
+          <Circle cx="78" cy="27" r="4" fill={palette.primary} opacity="0.65" />
+        </G>
+      ) : null}
+
+      {isStale ? (
+        <G>
+          <Path
+            d="M23 49 C29 27 58 18 76 36"
+            fill="none"
+            stroke={palette.primary}
+            strokeWidth="3"
+            strokeLinecap="round"
+            opacity="0.52"
+          />
+          <Path d="M76 36 L74 47 L85 42" fill="none" stroke={palette.primary} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.58" />
+          <Circle cx="27" cy="47" r="4" fill={palette.primary} opacity="0.62" />
+        </G>
+      ) : null}
+
+      {!isOnline && !isOffline && !isStale ? (
+        <G>
+          <Circle cx="82" cy="60" r="4.5" fill={palette.primary} opacity="0.8" />
+          <Circle cx="27" cy="38" r="3.8" fill={palette.primary} opacity="0.52" />
+          <Path d="M31 40 C45 33 65 35 80 58" fill="none" stroke={palette.primary} strokeWidth="2" strokeLinecap="round" opacity="0.34" />
+        </G>
+      ) : null}
     </Svg>
-  );
-}
-
-function ManagedImage({ color }: { color: string }) {
-  return (
-    <ImageShell color={color}>
-      <G>
-        <Rect x="23" y="25" width="56" height="38" rx="13" fill="url(#whiteCard)" stroke={color} strokeWidth="2.4" />
-        <Rect x="30" y="33" width="42" height="8" rx="4" fill={color} opacity="0.92" />
-        <Rect x="30" y="47" width="27" height="6" rx="3" fill={color} opacity="0.44" />
-        <Rect x="37" y="65" width="28" height="7" rx="3.5" fill={color} opacity="0.55" />
-        <Rect x="26" y="73" width="50" height="8" rx="4" fill={color} opacity="0.22" />
-        <Circle cx="75" cy="66" r="9" fill={color} />
-        <Path d="M70 66 L74 70 L82 61" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-      </G>
-    </ImageShell>
-  );
-}
-
-function OnlineImage({ color }: { color: string }) {
-  return (
-    <ImageShell color={color}>
-      <G>
-        <Circle cx="51" cy="50" r="29" fill="#FFFFFF" opacity="0.90" stroke={color} strokeWidth="2.4" />
-        <Circle cx="51" cy="50" r="19" fill={color} opacity="0.14" />
-        <Circle cx="51" cy="50" r="10" fill={color} />
-        <Circle cx="51" cy="50" r="4" fill="#FFFFFF" />
-        <Path d="M29 55 C32 68 43 76 56 75" fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" opacity="0.42" />
-        <Path d="M46 24 C60 23 72 32 77 45" fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" opacity="0.56" />
-        <Circle cx="78" cy="46" r="5" fill={color} />
-        <Circle cx="29" cy="67" r="4" fill={color} opacity="0.55" />
-      </G>
-    </ImageShell>
-  );
-}
-
-function OfflineImage({ color }: { color: string }) {
-  return (
-    <ImageShell color={color}>
-      <G>
-        <Rect x="28" y="24" width="47" height="54" rx="15" fill="url(#whiteCard)" stroke={color} strokeWidth="2.4" />
-        <Rect x="37" y="36" width="29" height="7" rx="3.5" fill={color} opacity="0.72" />
-        <Rect x="40" y="52" width="21" height="6" rx="3" fill={color} opacity="0.28" />
-        <Path d="M24 27 L78 80" stroke={color} strokeWidth="6" strokeLinecap="round" />
-        <Path d="M24 27 L78 80" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round" opacity="0.88" />
-        <Circle cx="27" cy="76" r="6" fill={color} />
-        <Circle cx="78" cy="30" r="5" fill={color} opacity="0.74" />
-        <Path d="M79 50 L86 57 M86 50 L79 57" stroke={color} strokeWidth="3" strokeLinecap="round" opacity="0.75" />
-      </G>
-    </ImageShell>
-  );
-}
-
-function StaleImage({ color }: { color: string }) {
-  return (
-    <ImageShell color={color}>
-      <G>
-        <Circle cx="51" cy="51" r="30" fill="#FFFFFF" opacity="0.92" stroke={color} strokeWidth="2.4" />
-        <Circle cx="51" cy="51" r="4.5" fill={color} />
-        <Path d="M51 33 V51 L64 59" stroke={color} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M30 32 C40 20 60 19 72 31" fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" opacity="0.58" />
-        <Path d="M72 31 L71 43 L82 37" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.62" />
-        <Circle cx="31" cy="32" r="5" fill={color} />
-        <Circle cx="71" cy="75" r="4.5" fill={color} opacity="0.52" />
-      </G>
-    </ImageShell>
   );
 }
 
 const styles = StyleSheet.create({
   frame: {
-    width: 102,
-    height: 102,
+    width: 104,
+    height: 104,
     alignItems: "center",
     justifyContent: "center",
   },
