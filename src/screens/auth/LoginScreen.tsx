@@ -4,13 +4,13 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Eye,
   EyeOff,
@@ -70,7 +70,7 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
   }
 
   return (
-    <SafeAreaView style={styles.page}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.page}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
