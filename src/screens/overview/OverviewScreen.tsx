@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  StyleSheet,
   Text,
   TouchableOpacity,
   View,
@@ -13,8 +14,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock3,
-  FileWarning,
+  FileText,
+  MapPin,
   RefreshCcw,
   Server,
   ShieldCheck,
@@ -22,616 +23,675 @@ import {
   WifiOff,
 } from "lucide-react-native";
 
-import StatusPill from "../../components/StatusPill";
-import {
-  useLiveWorklist,
-  useOperationsSummary,
-} from "../../hooks/useLiveOpsData";
+import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
+import { colors } from "../../theme/colors";
 import { formatNumber } from "../../utils/formatters";
-import { styles } from "./OverviewScreen.styles";
 
-type GradientColors = [string, string];
-
-const palette = {
-  blue: "#2563EB",
-  cyan: "#0891B2",
-  purple: "#7C3AED",
-  red: "#DC2626",
-  amber: "#D97706",
-  green: "#059669",
+const ui = {
+  bg: "#EEF3FA",
+  ink: "#0B1220",
+  softInk: "#53657C",
+  muted: "#8795A7",
+  card: "#FFFFFF",
+  line: "#DDE7F3",
   navy: "#07111F",
+  navy2: "#0B1E3A",
+  blue: "#2357D5",
+  cyan: "#0E8FA6",
+  green: "#179C65",
+  amber: "#D48619",
+  red: "#D94444",
+  purple: "#7455D6",
 };
-
-type StatusCardConfig = {
-  id: string;
-  title: string;
-  description: string;
-  value: number;
-  percent: number;
-  progressLabel: string;
-  icon: any;
-  gradient: GradientColors;
-  target: string;
-};
-
-type PriorityConfig = {
-  title: string;
-  value: number;
-  description: string;
-  icon: any;
-  color: string;
-  tone: "red" | "amber" | "purple" | "blue" | "green";
-  label: string;
-  target: string;
-};
-
-type OverviewException = {
-  title: string;
-  source: string;
-  site: string;
-  time: string;
-  severity: string;
-  icon: any;
-  color: string;
-  reason: string;
-  recommendedAction: string;
-};
-
-function getWorkItemIcon(type: string) {
-  if (type === "ticket") return Ticket;
-  if (type === "software") return FileWarning;
-  if (type === "remote") return AlertTriangle;
-  if (type === "asset") return Server;
-  return WifiOff;
-}
-
-function getWorkItemColor(type: string, priority: string) {
-  if (priority === "High") return palette.red;
-  if (type === "ticket") return palette.purple;
-  if (type === "software") return palette.amber;
-  if (type === "remote") return palette.cyan;
-  return palette.blue;
-}
 
 export default function OverviewScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const {
-    summary: dashboardSummary,
-    loading: summaryLoading,
-    refreshing: summaryRefreshing,
-    error: summaryError,
-    reloadSummary,
-  } = useOperationsSummary();
-  const {
-    items: workItems,
-    loading: worklistLoading,
-    refreshing: worklistRefreshing,
-    error: worklistError,
-    reloadWorklist,
-  } = useLiveWorklist();
+  const { snapshot, loading, refreshing, error, reloadSnapshot } = useMobileOpsSnapshot();
 
-  const refreshing = summaryRefreshing || worklistRefreshing;
-  const hasLoading = summaryLoading || worklistLoading;
-  const errorText = summaryError || worklistError;
+  const endpointCoverage = useMemo(() => {
+    if (!snapshot.endpoints.total) return 0;
+    return Math.round((snapshot.endpoints.online / snapshot.endpoints.total) * 100);
+  }, [snapshot.endpoints.online, snapshot.endpoints.total]);
 
-  const activeCoverage = useMemo(() => {
-    if (!dashboardSummary.totalEndpoints) return 0;
-
-    return Math.round(
-      (dashboardSummary.activeDevices / dashboardSummary.totalEndpoints) * 100
-    );
-  }, [dashboardSummary.activeDevices, dashboardSummary.totalEndpoints]);
-
-  const notReporting = useMemo(() => {
-    return Math.max(
-      dashboardSummary.offlineDevices ||
-        dashboardSummary.totalEndpoints - dashboardSummary.activeDevices,
-      0
-    );
-  }, [
-    dashboardSummary.activeDevices,
-    dashboardSummary.offlineDevices,
-    dashboardSummary.totalEndpoints,
-  ]);
-
-  const notReportingRate = useMemo(() => {
-    if (!dashboardSummary.totalEndpoints) return 0;
-
-    return Math.round((notReporting / dashboardSummary.totalEndpoints) * 100);
-  }, [dashboardSummary.totalEndpoints, notReporting]);
-
-  const highRiskRate = useMemo(() => {
-    if (!dashboardSummary.openTickets) return 0;
-
-    return Math.round(
-      (dashboardSummary.highRiskExceptions / dashboardSummary.openTickets) * 100
-    );
-  }, [dashboardSummary.highRiskExceptions, dashboardSummary.openTickets]);
-
-  const operationalExceptions: OverviewException[] = useMemo(() => {
-    return workItems.slice(0, 3).map((item) => ({
-      title: item.title,
-      source: item.source,
-      site: item.site,
-      time: item.updated,
-      severity: item.priority,
-      icon: getWorkItemIcon(item.type),
-      color: getWorkItemColor(item.type, item.priority),
-      reason: item.reason,
-      recommendedAction: item.action,
-    }));
-  }, [workItems]);
-
-  const statusCards: StatusCardConfig[] = [
-    {
-      id: "managed",
-      title: "Managed Assets",
-      description: "Total monitored endpoints",
-      value: dashboardSummary.totalEndpoints,
-      percent: 100,
-      progressLabel: "Monitoring scope",
-      icon: Server,
-      gradient: ["#1E3A8A", "#2563EB"],
-      target: "EndpointSummary",
-    },
-    {
-      id: "active",
-      title: "Active Reporting",
-      description: "Reporting within 7 days",
-      value: dashboardSummary.activeDevices,
-      percent: activeCoverage,
-      progressLabel: "Active coverage",
-      icon: CheckCircle2,
-      gradient: ["#065F46", "#10B981"],
-      target: "ActiveDeviceCoverage",
-    },
-    {
-      id: "offline",
-      title: "Not Reporting",
-      description: "Requires endpoint review",
-      value: notReporting,
-      percent: notReportingRate,
-      progressLabel: "Offline exposure",
-      icon: WifiOff,
-      gradient: ["#991B1B", "#EF4444"],
-      target: "EndpointSummary",
-    },
-    {
-      id: "risk",
-      title: "High Risk",
-      description: "Need operational attention",
-      value: dashboardSummary.highRiskExceptions,
-      percent: highRiskRate,
-      progressLabel: "Risk exposure",
-      icon: AlertTriangle,
-      gradient: ["#581C87", "#8B5CF6"],
-      target: "RiskSummary",
-    },
-  ];
-
-  const priorityRows: PriorityConfig[] = [
-    {
-      title: "Offline / Not Reporting",
-      value: notReporting,
-      description: "Devices require endpoint follow-up",
-      icon: WifiOff,
-      color: palette.red,
-      tone: "red",
-      label: "Action",
-      target: "EndpointSummary",
-    },
-    {
-      title: "Open Tickets",
-      value: dashboardSummary.openTickets,
-      description: "Support workload requiring attention",
-      icon: Ticket,
-      color: palette.purple,
-      tone: "purple",
-      label: "Review",
-      target: "TicketSummary",
-    },
-    {
-      title: "High Risk Exceptions",
-      value: dashboardSummary.highRiskExceptions,
-      description: "Operational items requiring escalation",
-      icon: AlertTriangle,
-      color: palette.amber,
-      tone: "amber",
-      label: "Watch",
-      target: "RiskSummary",
-    },
-  ];
-
-  function goTo(target: string) {
-    navigation.navigate(target);
-  }
-
-  function openException(item: OverviewException) {
-    navigation.navigate("ExceptionDetail", {
-      title: item.title,
-      source: item.source,
-      site: item.site,
-      time: item.time,
-      severity: item.severity,
-      reason: item.reason,
-      recommendedAction: item.recommendedAction,
-    });
-  }
+  const slaSafe = Math.max(0, Math.min(snapshot.tickets.slaAchievement || 0, 100));
+  const locationPreview = snapshot.locations.slice(0, 6);
 
   function handleRefresh() {
-    reloadSummary({ silent: true });
-    reloadWorklist({ silent: true });
+    reloadSnapshot({ silent: true });
+  }
+
+  function openTab(tabName: string) {
+    navigation.getParent()?.navigate(tabName);
   }
 
   return (
     <View style={styles.page}>
-      <View style={[styles.safeTopBlock, { height: insets.top }]} />
+      <View style={{ height: insets.top, backgroundColor: ui.navy }} />
 
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={[
-          styles.container,
-          {
-            paddingTop: 12,
-            paddingBottom: Math.max(insets.bottom, 18) + 118,
-          },
-        ]}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 96 }}
         showsVerticalScrollIndicator={false}
-        bounces={false}
-        alwaysBounceVertical={false}
-        overScrollMode="never"
-        contentInsetAdjustmentBehavior="never"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        <View style={styles.pageHeader}>
-          <View>
-            <Text style={styles.pageTitle}>Operations Overview</Text>
-            <Text style={styles.pageMeta}>
-              Malaysia Sites  •  Live Data  •  Pull to refresh
-            </Text>
+        <LinearGradient
+          colors={[ui.navy, ui.navy2, "#102A53"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.heroGlowOne} />
+          <View style={styles.heroGlowTwo} />
+
+          <View style={styles.headerRow}>
+            <View>
+              <Text style={styles.eyebrow}>OPS MOBILE</Text>
+              <Text style={styles.heroTitle}>Operations Snapshot</Text>
+              <Text style={styles.heroMeta}>Live data · {snapshot.generatedAt}</Text>
+            </View>
+
+            <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh} activeOpacity={0.85}>
+              {loading || refreshing ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <RefreshCcw size={18} color="#FFFFFF" strokeWidth={2.8} />
+              )}
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.refreshButton}
-            activeOpacity={0.85}
-            onPress={handleRefresh}
-          >
-            {refreshing || hasLoading ? (
-              <ActivityIndicator size="small" color={palette.blue} />
-            ) : (
-              <RefreshCcw size={18} color={palette.blue} strokeWidth={2.7} />
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {errorText ? (
-          <View style={styles.companionCard}>
-            <View style={styles.companionIcon}>
-              <AlertTriangle size={18} color={palette.red} strokeWidth={2.7} />
-            </View>
-
-            <View style={styles.companionTextWrap}>
-              <Text style={styles.companionTitle}>Live data unavailable</Text>
-              <Text style={styles.companionDesc}>{errorText}</Text>
-            </View>
-
-            <StatusPill label="Check" tone="red" />
-          </View>
-        ) : null}
-
-        <View style={styles.heroCard}>
-          <View style={styles.heroGlowTop} />
-          <View style={styles.heroGlowBottom} />
-
-          <View style={styles.heroTopRow}>
-            <View style={styles.heroIcon}>
-              <ShieldCheck size={27} color="#FFFFFF" strokeWidth={2.8} />
-            </View>
-
-            <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>LIVE MONITORING</Text>
-            </View>
-          </View>
-
-          <Text style={styles.heroTitle}>Operational Health Status</Text>
-
-          <Text style={styles.heroDesc}>
-            Lightweight companion view for quick monitoring, urgent exceptions
-            and operational awareness across selected Malaysian sites.
-          </Text>
 
           <View style={styles.heroDivider} />
 
-          <View style={styles.heroStats}>
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatValue}>
-                {formatNumber(dashboardSummary.totalEndpoints)}
-              </Text>
-              <Text style={styles.heroStatLabel}>Managed Endpoints</Text>
-            </View>
+          <View style={styles.heroMetricRow}>
+            <HeroMetric label="Endpoints" value={formatNumber(snapshot.endpoints.total)} />
+            <View style={styles.heroMetricLine} />
+            <HeroMetric label="Online" value={`${endpointCoverage}%`} />
+            <View style={styles.heroMetricLine} />
+            <HeroMetric label="Open Tickets" value={formatNumber(snapshot.tickets.open)} />
+          </View>
+        </LinearGradient>
 
-            <View style={styles.heroStatDivider} />
-
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatValue}>{activeCoverage}%</Text>
-              <Text style={styles.heroStatLabel}>Active Coverage</Text>
-            </View>
-
-            <View style={styles.heroStatDivider} />
-
-            <View style={styles.heroStatItem}>
-              <Text style={styles.heroStatValue}>
-                {formatNumber(dashboardSummary.highRiskExceptions)}
-              </Text>
-              <Text style={styles.heroStatLabel}>High Risk</Text>
+        {error ? (
+          <View style={styles.alertCard}>
+            <AlertTriangle size={18} color={ui.red} strokeWidth={2.8} />
+            <View style={styles.alertTextWrap}>
+              <Text style={styles.alertTitle}>Live data unavailable</Text>
+              <Text style={styles.alertText}>{error}</Text>
             </View>
           </View>
+        ) : null}
+
+        <View style={styles.quickRow}>
+          <TouchableOpacity style={styles.quickButton} onPress={() => openTab("Operator")} activeOpacity={0.86}>
+            <ShieldCheck size={18} color={ui.blue} strokeWidth={2.8} />
+            <Text style={styles.quickText}>Operator</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.quickButton} onPress={() => openTab("Reports")} activeOpacity={0.86}>
+            <FileText size={18} color={ui.purple} strokeWidth={2.8} />
+            <Text style={styles.quickText}>Reports</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Operational Status</Text>
-            <Text style={styles.panelFilter}>Live View</Text>
+        <Section title="Endpoint Fleet" subtitle="Online, offline and stale only">
+          <View style={styles.compactGrid}>
+            <MetricTile title="Total" value={snapshot.endpoints.total} color={ui.blue} icon={Server} />
+            <MetricTile title="Online" value={snapshot.endpoints.online} color={ui.green} icon={CheckCircle2} />
+            <MetricTile title="Offline" value={snapshot.endpoints.offline} color={ui.red} icon={WifiOff} />
+            <MetricTile title="Stale" value={snapshot.endpoints.stale} color={ui.amber} icon={AlertTriangle} />
+          </View>
+        </Section>
+
+        <Section title="Service Desk" subtitle="Ticket status and SLA exposure">
+          <View style={styles.ticketPanel}>
+            <View style={styles.ticketMainBlock}>
+              <Text style={styles.ticketLabel}>Total Tickets</Text>
+              <Text style={styles.ticketValue}>{formatNumber(snapshot.tickets.total)}</Text>
+              <Text style={styles.ticketHint}>Open {formatNumber(snapshot.tickets.open)} · Closed {formatNumber(snapshot.tickets.closed)}</Text>
+            </View>
+
+            <View style={styles.slaBlock}>
+              <View style={styles.slaIconWrap}>
+                <Ticket size={18} color={ui.red} strokeWidth={2.8} />
+              </View>
+              <Text style={styles.slaValue}>{formatNumber(snapshot.tickets.slaExceeded)}</Text>
+              <Text style={styles.slaLabel}>SLA Exceed</Text>
+            </View>
           </View>
 
-          <View style={styles.statusGrid}>
-            {statusCards.map((item) => (
-              <StatusMiniCard
+          <View style={styles.progressHeader}>
+            <Text style={styles.progressText}>SLA Achievement</Text>
+            <Text style={styles.progressValue}>{slaSafe}%</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${slaSafe}%` }]} />
+          </View>
+        </Section>
+
+        <Section
+          title="Latest Device Locations"
+          subtitle={`One latest location per device · ${formatNumber(snapshot.locationTotal)} devices`}
+          action="Operator"
+          onAction={() => openTab("Operator")}
+        >
+          {locationPreview.length === 0 ? (
+            <Text style={styles.emptyText}>No geolocation record found.</Text>
+          ) : (
+            locationPreview.map((item, index) => (
+              <LocationRow
                 key={item.id}
-                title={item.title}
-                description={item.description}
-                value={item.value}
-                percent={item.percent}
-                progressLabel={item.progressLabel}
-                icon={item.icon}
-                gradient={item.gradient}
-                onPress={() => goTo(item.target)}
+                name={item.deviceName}
+                address={item.address}
+                user={item.username}
+                time={item.time}
+                isLast={index === locationPreview.length - 1}
               />
-            ))}
-          </View>
-        </View>
+            ))
+          )}
+        </Section>
 
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Priority Overview</Text>
-            <Text style={styles.panelFilter}>Today</Text>
-          </View>
-
-          <View style={styles.priorityList}>
-            {priorityRows.map((item, index) => (
-              <PriorityRow
-                key={item.title}
-                title={item.title}
-                value={item.value}
-                description={item.description}
-                icon={item.icon}
-                color={item.color}
-                tone={item.tone}
-                label={item.label}
-                isLast={index === priorityRows.length - 1}
-                onPress={() => goTo(item.target)}
-              />
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.panel}>
-          <View style={styles.panelHeader}>
-            <Text style={styles.panelTitle}>Operational Exceptions</Text>
-            <Text style={styles.panelFilter}>Latest</Text>
-          </View>
-
-          <View style={styles.exceptionList}>
-            {operationalExceptions.length === 0 ? (
-              <Text style={styles.companionDesc}>No live exception item found.</Text>
-            ) : (
-              operationalExceptions.map((item, index) => (
-                <ExceptionRow
-                  key={`${item.source}-${item.title}`}
-                  title={item.title}
-                  source={item.source}
-                  site={item.site}
-                  time={item.time}
-                  severity={item.severity}
-                  icon={item.icon}
-                  color={item.color}
-                  isLast={index === operationalExceptions.length - 1}
-                  onPress={() => openException(item)}
-                />
-              ))
-            )}
-          </View>
-        </View>
-
-        <View style={styles.companionCard}>
-          <View style={styles.companionIcon}>
-            <Clock3 size={18} color={palette.cyan} strokeWidth={2.7} />
-          </View>
-
-          <View style={styles.companionTextWrap}>
-            <Text style={styles.companionTitle}>Mobile Companion View</Text>
-            <Text style={styles.companionDesc}>
-              Full charts, tables, filters and detailed analysis remain in the
-              main EMA web system.
-            </Text>
-          </View>
-
-          <StatusPill label="UAT" tone="blue" />
-        </View>
+        <Section
+          title="Latest Report"
+          subtitle="Most recent generated/report catalog item"
+          action="Reports"
+          onAction={() => openTab("Reports")}
+        >
+          {snapshot.latestReport ? (
+            <View style={styles.reportCard}>
+              <View style={styles.reportIcon}>
+                <FileText size={20} color="#FFFFFF" strokeWidth={2.8} />
+              </View>
+              <View style={styles.reportTextWrap}>
+                <Text style={styles.reportTitle}>{snapshot.latestReport.title}</Text>
+                <Text style={styles.reportDesc} numberOfLines={2}>{snapshot.latestReport.description}</Text>
+                <Text style={styles.reportMeta}>{snapshot.latestReport.category} · {snapshot.latestReport.lastGenerated || "-"}</Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>No report item found.</Text>
+          )}
+        </Section>
       </ScrollView>
     </View>
   );
 }
 
-type StatusMiniCardProps = {
-  title: string;
-  description: string;
-  value: number;
-  percent: number;
-  progressLabel: string;
-  icon: any;
-  gradient: GradientColors;
-  onPress: () => void;
-};
-
-function StatusMiniCard({
-  title,
-  description,
-  value,
-  percent,
-  progressLabel,
-  icon: Icon,
-  gradient,
-  onPress,
-}: StatusMiniCardProps) {
-  const safePercent = Math.max(0, Math.min(percent, 100));
-
+function HeroMetric({ label, value }: { label: string; value: string }) {
   return (
-    <TouchableOpacity
-      style={styles.statusMiniCardShell}
-      activeOpacity={0.88}
-      onPress={onPress}
-    >
-      <LinearGradient
-        colors={gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.statusMiniCard}
-      >
-        <View style={styles.cardGlowOne} />
-        <View style={styles.cardGlowTwo} />
-
-        <View style={styles.statusMiniTop}>
-          <View style={styles.statusValueWrap}>
-            <Text style={styles.statusMiniValue}>{formatNumber(value)}</Text>
-            <Text style={styles.statusMiniTitle}>{title}</Text>
-          </View>
-
-          <View style={styles.statusIcon}>
-            <Icon size={15} color="#FFFFFF" strokeWidth={2.8} />
-          </View>
-        </View>
-
-        <Text style={styles.statusMiniDesc}>{description}</Text>
-
-        <View style={styles.progressInfoRow}>
-          <Text style={styles.progressLabel}>{progressLabel}</Text>
-          <Text style={styles.progressValue}>{safePercent}%</Text>
-        </View>
-
-        <View style={styles.progressTrack}>
-          <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${safePercent}%`,
-              },
-            ]}
-          />
-        </View>
-      </LinearGradient>
-    </TouchableOpacity>
+    <View style={styles.heroMetric}>
+      <Text style={styles.heroMetricValue}>{value}</Text>
+      <Text style={styles.heroMetricLabel}>{label}</Text>
+    </View>
   );
 }
 
-type PriorityRowProps = {
-  title: string;
-  value: number;
-  description: string;
-  icon: any;
-  color: string;
-  tone: "red" | "amber" | "purple" | "blue" | "green";
-  label: string;
-  isLast?: boolean;
-  onPress: () => void;
-};
-
-function PriorityRow({
+function Section({
   title,
-  value,
-  description,
-  icon: Icon,
-  color,
-  tone,
-  label,
-  isLast = false,
-  onPress,
-}: PriorityRowProps) {
+  subtitle,
+  children,
+  action,
+  onAction,
+}: {
+  title: string;
+  subtitle: string;
+  children: React.ReactNode;
+  action?: string;
+  onAction?: () => void;
+}) {
   return (
-    <TouchableOpacity
-      style={[styles.priorityRow, isLast && styles.rowLast]}
-      activeOpacity={0.86}
-      onPress={onPress}
-    >
-      <View style={[styles.priorityAccent, { backgroundColor: color }]} />
-
-      <View style={[styles.priorityIcon, { backgroundColor: `${color}12` }]}>
-        <Icon size={17} color={color} strokeWidth={2.7} />
+    <View style={styles.sectionCard}>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionTitleWrap}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+        </View>
+        {action && onAction ? (
+          <TouchableOpacity style={styles.sectionAction} onPress={onAction} activeOpacity={0.85}>
+            <Text style={styles.sectionActionText}>{action}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
-
-      <View style={styles.priorityTextWrap}>
-        <Text style={styles.priorityTitle}>{title}</Text>
-        <Text style={styles.priorityDesc}>{description}</Text>
-      </View>
-
-      <View style={styles.priorityRight}>
-        <Text style={styles.priorityValue}>{formatNumber(value)}</Text>
-        <StatusPill label={label} tone={tone} />
-      </View>
-    </TouchableOpacity>
+      {children}
+    </View>
   );
 }
 
-type ExceptionRowProps = {
-  title: string;
-  source: string;
-  site: string;
-  time: string;
-  severity: string;
-  icon: any;
-  color: string;
-  isLast?: boolean;
-  onPress: () => void;
-};
+function MetricTile({ title, value, color, icon: Icon }: { title: string; value: number; color: string; icon: any }) {
+  return (
+    <View style={styles.metricTile}>
+      <View style={[styles.metricIcon, { backgroundColor: `${color}16` }]}>
+        <Icon size={17} color={color} strokeWidth={2.8} />
+      </View>
+      <Text style={styles.metricValue}>{formatNumber(value)}</Text>
+      <Text style={styles.metricTitle}>{title}</Text>
+    </View>
+  );
+}
 
-function ExceptionRow({
-  title,
-  source,
-  site,
+function LocationRow({
+  name,
+  address,
+  user,
   time,
-  severity,
-  icon: Icon,
-  color,
-  isLast = false,
-  onPress,
-}: ExceptionRowProps) {
-  const tone = severity === "High" ? "red" : "amber";
-
+  isLast,
+}: {
+  name: string;
+  address: string;
+  user: string;
+  time: string;
+  isLast?: boolean;
+}) {
   return (
-    <TouchableOpacity
-      style={[styles.exceptionRow, isLast && styles.rowLast]}
-      activeOpacity={0.86}
-      onPress={onPress}
-    >
-      <View style={[styles.exceptionIcon, { backgroundColor: `${color}12` }]}>
-        <Icon size={17} color={color} strokeWidth={2.7} />
+    <View style={[styles.locationRow, isLast && styles.noBorder]}>
+      <View style={styles.locationIcon}>
+        <MapPin size={16} color={ui.cyan} strokeWidth={2.8} />
       </View>
-
-      <View style={styles.exceptionTextWrap}>
-        <View style={styles.exceptionTopRow}>
-          <Text style={styles.exceptionTitle}>{title}</Text>
-          <Text style={styles.exceptionTime}>{time}</Text>
-        </View>
-
-        <Text style={styles.exceptionMeta}>
-          {source} · {site}
-        </Text>
+      <View style={styles.locationTextWrap}>
+        <Text style={styles.locationName}>{name}</Text>
+        <Text style={styles.locationAddress} numberOfLines={1}>{address}</Text>
+        <Text style={styles.locationMeta}>{user} · {time}</Text>
       </View>
-
-      <StatusPill label={severity} tone={tone} />
-    </TouchableOpacity>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    backgroundColor: ui.bg,
+  },
+  scrollArea: {
+    flex: 1,
+  },
+  hero: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 22,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: "hidden",
+  },
+  heroGlowOne: {
+    position: "absolute",
+    width: 190,
+    height: 190,
+    borderRadius: 190,
+    backgroundColor: "rgba(35,87,213,0.42)",
+    top: -88,
+    right: -62,
+  },
+  heroGlowTwo: {
+    position: "absolute",
+    width: 160,
+    height: 160,
+    borderRadius: 160,
+    backgroundColor: "rgba(14,143,166,0.28)",
+    bottom: -82,
+    left: -72,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  eyebrow: {
+    color: "#9DC2FF",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    color: "#FFFFFF",
+    fontSize: 26,
+    fontWeight: "900",
+    letterSpacing: -0.8,
+    marginTop: 6,
+  },
+  heroMeta: {
+    color: "#B5C7DE",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 7,
+  },
+  refreshButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  heroDivider: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    marginTop: 24,
+    marginBottom: 18,
+  },
+  heroMetricRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  heroMetric: {
+    flex: 1,
+  },
+  heroMetricValue: {
+    color: "#FFFFFF",
+    fontSize: 23,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+  },
+  heroMetricLabel: {
+    color: "#8EA4BE",
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 4,
+  },
+  heroMetricLine: {
+    width: 1,
+    height: 36,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    marginHorizontal: 12,
+  },
+  alertCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: "#FFF5F5",
+    borderWidth: 1,
+    borderColor: "#FAD0D0",
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  alertTextWrap: {
+    flex: 1,
+    marginLeft: 10,
+  },
+  alertTitle: {
+    color: ui.ink,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  alertText: {
+    color: ui.softInk,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  quickRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 14,
+  },
+  quickButton: {
+    flex: 1,
+    backgroundColor: ui.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: ui.line,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  quickText: {
+    color: ui.ink,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  sectionCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: ui.card,
+    borderRadius: 22,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: ui.line,
+    shadowColor: "#5B6B83",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 13,
+  },
+  sectionTitleWrap: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  sectionTitle: {
+    color: ui.ink,
+    fontSize: 15,
+    fontWeight: "900",
+    letterSpacing: -0.25,
+  },
+  sectionSubtitle: {
+    color: ui.softInk,
+    fontSize: 10.5,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  sectionAction: {
+    backgroundColor: "#EDF4FF",
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+  sectionActionText: {
+    color: ui.blue,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  compactGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  metricTile: {
+    width: "47.9%",
+    minHeight: 104,
+    backgroundColor: "#F8FBFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5EEF8",
+    padding: 12,
+  },
+  metricIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  metricValue: {
+    color: ui.ink,
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+    marginTop: 10,
+  },
+  metricTitle: {
+    color: ui.softInk,
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 3,
+  },
+  ticketPanel: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  ticketMainBlock: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: "#F8FBFF",
+    borderWidth: 1,
+    borderColor: "#E5EEF8",
+    padding: 14,
+  },
+  ticketLabel: {
+    color: ui.softInk,
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  ticketValue: {
+    color: ui.ink,
+    fontSize: 31,
+    fontWeight: "900",
+    marginTop: 7,
+    letterSpacing: -0.9,
+  },
+  ticketHint: {
+    color: ui.softInk,
+    fontSize: 10.5,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  slaBlock: {
+    width: 105,
+    borderRadius: 18,
+    backgroundColor: "#FFF7ED",
+    borderWidth: 1,
+    borderColor: "#FED7AA",
+    padding: 13,
+    alignItems: "center",
+  },
+  slaIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
+    backgroundColor: "#FEE2E2",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slaValue: {
+    color: ui.red,
+    fontSize: 24,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+  slaLabel: {
+    color: ui.softInk,
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+  progressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 14,
+    marginBottom: 7,
+  },
+  progressText: {
+    color: ui.softInk,
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+  progressValue: {
+    color: ui.ink,
+    fontSize: 10.5,
+    fontWeight: "900",
+  },
+  progressTrack: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: "#E9EEF7",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: ui.green,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EDF2F8",
+  },
+  noBorder: {
+    borderBottomWidth: 0,
+  },
+  locationIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    backgroundColor: "#E6F7FB",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+  locationTextWrap: {
+    flex: 1,
+  },
+  locationName: {
+    color: ui.ink,
+    fontSize: 12.5,
+    fontWeight: "900",
+  },
+  locationAddress: {
+    color: ui.softInk,
+    fontSize: 10.5,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  locationMeta: {
+    color: ui.muted,
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  reportCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FBFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5EEF8",
+    padding: 13,
+  },
+  reportIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: ui.purple,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  reportTextWrap: {
+    flex: 1,
+  },
+  reportTitle: {
+    color: ui.ink,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  reportDesc: {
+    color: ui.softInk,
+    fontSize: 10.5,
+    fontWeight: "700",
+    marginTop: 4,
+    lineHeight: 15,
+  },
+  reportMeta: {
+    color: ui.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    marginTop: 6,
+  },
+  emptyText: {
+    color: ui.softInk,
+    fontSize: 11,
+    fontWeight: "700",
+    paddingVertical: 4,
+  },
+});
