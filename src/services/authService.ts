@@ -4,7 +4,7 @@ import {
   clearSessionToken,
   getSessionToken,
   saveSessionToken,
-} from "../utils/secureStorage";
+} from "./secureStorage";
 import { apiRequest } from "./apiClient";
 
 function text(value: unknown, fallback = "") {
