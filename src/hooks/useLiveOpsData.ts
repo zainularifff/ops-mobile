@@ -2,12 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { DashboardSummary } from "../types/dashboard";
 import {
-  fetchOperationsSummary,
+  fetchMobileOpsSnapshot,
   fetchReportCatalog,
-  fetchWorklistItems,
-  getCachedOperationsSummary,
+  getCachedMobileOpsSnapshot,
   getCachedReportCatalog,
-  getCachedWorklistItems,
   type MobileReportItem,
   type MobileWorkItem,
 } from "../services/opsMobileService";
@@ -20,33 +18,77 @@ export const emptyDashboardSummary: DashboardSummary = {
   highRiskExceptions: 0,
 };
 
-type LoadOptions = {
-  silent?: boolean;
-};
+type LoadOptions = { silent?: boolean };
 
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   return String(error || "Failed to load live data.");
 }
 
+function mapSnapshotToSummary(snapshot: any): DashboardSummary {
+  return {
+    totalEndpoints: snapshot?.endpoints?.total || 0,
+    activeDevices: snapshot?.endpoints?.online || 0,
+    offlineDevices: (snapshot?.endpoints?.offline || 0) + (snapshot?.endpoints?.stale || 0),
+    openTickets: snapshot?.tickets?.open || 0,
+    highRiskExceptions: snapshot?.tickets?.slaExceeded || 0,
+  };
+}
+
+function mapSnapshotToWorkItems(snapshot: any): MobileWorkItem[] {
+  const rows: MobileWorkItem[] = [];
+
+  if (snapshot?.latestReport) {
+    rows.push({
+      id: "latest-report",
+      type: "asset",
+      title: snapshot.latestReport.title || "Latest report",
+      source: "Report",
+      site: snapshot.latestReport.category || "-",
+      priority: "Low",
+      status: snapshot.latestReport.type || "-",
+      due: "-",
+      updated: snapshot.latestReport.lastGenerated || snapshot.generatedAt || "-",
+      owner: "-",
+      reason: snapshot.latestReport.description || "Latest report item.",
+      action: "Review in web report module.",
+    });
+  }
+
+  if (snapshot?.latestLocation) {
+    rows.push({
+      id: "latest-location",
+      type: "endpoint",
+      title: snapshot.latestLocation.deviceName || "Latest device location",
+      source: "Geolocation",
+      site: snapshot.latestLocation.address || "-",
+      priority: "Low",
+      status: "Latest",
+      due: "-",
+      updated: snapshot.latestLocation.time || "-",
+      owner: snapshot.latestLocation.username || "-",
+      reason: `${snapshot.latestLocation.latitude || "-"}, ${snapshot.latestLocation.longitude || "-"}`,
+      action: "Use web geolocation module for full map view.",
+    });
+  }
+
+  return rows;
+}
+
 export function useOperationsSummary() {
-  const [summary, setSummary] = useState<DashboardSummary>(() => {
-    return getCachedOperationsSummary() || emptyDashboardSummary;
-  });
-  const [loading, setLoading] = useState(() => !getCachedOperationsSummary());
+  const cachedSnapshot = getCachedMobileOpsSnapshot();
+  const [summary, setSummary] = useState<DashboardSummary>(() => cachedSnapshot ? mapSnapshotToSummary(cachedSnapshot) : emptyDashboardSummary);
+  const [loading, setLoading] = useState(() => !cachedSnapshot);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const loadSummary = useCallback(async (options: LoadOptions = {}) => {
-    if (options.silent) {
-      setRefreshing(true);
-    } else if (!getCachedOperationsSummary()) {
-      setLoading(true);
-    }
+    if (options.silent) setRefreshing(true);
+    else if (!getCachedMobileOpsSnapshot()) setLoading(true);
 
     try {
-      const liveSummary = await fetchOperationsSummary({ force: options.silent });
-      setSummary(liveSummary);
+      const snapshot = await fetchMobileOpsSnapshot({ force: options.silent });
+      setSummary(mapSnapshotToSummary(snapshot));
       setError("");
     } catch (err) {
       setError(errorMessage(err));
@@ -56,40 +98,25 @@ export function useOperationsSummary() {
     }
   }, []);
 
-  useEffect(() => {
-    loadSummary();
-  }, [loadSummary]);
+  useEffect(() => { loadSummary(); }, [loadSummary]);
 
-  return {
-    summary,
-    loading,
-    refreshing,
-    error,
-    reloadSummary: loadSummary,
-  };
+  return { summary, loading, refreshing, error, reloadSummary: loadSummary };
 }
 
-export function useLiveWorklist(limit = 25) {
-  const [items, setItems] = useState<MobileWorkItem[]>(() => {
-    return getCachedWorklistItems(limit) || [];
-  });
-  const [loading, setLoading] = useState(() => !getCachedWorklistItems(limit));
+export function useLiveWorklist() {
+  const cachedSnapshot = getCachedMobileOpsSnapshot();
+  const [items, setItems] = useState<MobileWorkItem[]>(() => cachedSnapshot ? mapSnapshotToWorkItems(cachedSnapshot) : []);
+  const [loading, setLoading] = useState(() => !cachedSnapshot);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const loadWorklist = useCallback(async (options: LoadOptions = {}) => {
-    if (options.silent) {
-      setRefreshing(true);
-    } else if (!getCachedWorklistItems(limit)) {
-      setLoading(true);
-    }
+    if (options.silent) setRefreshing(true);
+    else if (!getCachedMobileOpsSnapshot()) setLoading(true);
 
     try {
-      const liveItems = await fetchWorklistItems({
-        force: options.silent,
-        limit,
-      });
-      setItems(liveItems);
+      const snapshot = await fetchMobileOpsSnapshot({ force: options.silent });
+      setItems(mapSnapshotToWorkItems(snapshot));
       setError("");
     } catch (err) {
       setError(errorMessage(err));
@@ -97,35 +124,22 @@ export function useLiveWorklist(limit = 25) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [limit]);
+  }, []);
 
-  useEffect(() => {
-    loadWorklist();
-  }, [loadWorklist]);
+  useEffect(() => { loadWorklist(); }, [loadWorklist]);
 
-  return {
-    items,
-    loading,
-    refreshing,
-    error,
-    reloadWorklist: loadWorklist,
-  };
+  return { items, loading, refreshing, error, reloadWorklist: loadWorklist };
 }
 
 export function useLiveReports() {
-  const [reports, setReports] = useState<MobileReportItem[]>(() => {
-    return getCachedReportCatalog() || [];
-  });
+  const [reports, setReports] = useState<MobileReportItem[]>(() => getCachedReportCatalog() || []);
   const [loading, setLoading] = useState(() => !getCachedReportCatalog());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const loadReports = useCallback(async (options: LoadOptions = {}) => {
-    if (options.silent) {
-      setRefreshing(true);
-    } else if (!getCachedReportCatalog()) {
-      setLoading(true);
-    }
+    if (options.silent) setRefreshing(true);
+    else if (!getCachedReportCatalog()) setLoading(true);
 
     try {
       const liveReports = await fetchReportCatalog({ force: options.silent });
@@ -139,15 +153,7 @@ export function useLiveReports() {
     }
   }, []);
 
-  useEffect(() => {
-    loadReports();
-  }, [loadReports]);
+  useEffect(() => { loadReports(); }, [loadReports]);
 
-  return {
-    reports,
-    loading,
-    refreshing,
-    error,
-    reloadReports: loadReports,
-  };
+  return { reports, loading, refreshing, error, reloadReports: loadReports };
 }
