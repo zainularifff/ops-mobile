@@ -7,6 +7,12 @@ import {
 } from "./secureStorage";
 import { apiRequest } from "./apiClient";
 
+export type TwoFactorStatus = {
+  enabled: boolean;
+  setupRequired?: boolean;
+  message?: string;
+};
+
 function text(value: unknown, fallback = "") {
   const cleanValue = String(value ?? "").trim();
   return cleanValue || fallback;
@@ -15,6 +21,17 @@ function text(value: unknown, fallback = "") {
 function numberValue(value: unknown, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function booleanValue(value: unknown, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value === 1;
+
+  const clean = String(value ?? "").trim().toLowerCase();
+  if (["true", "1", "yes", "enabled", "enable", "active"].includes(clean)) return true;
+  if (["false", "0", "no", "disabled", "disable", "inactive"].includes(clean)) return false;
+
+  return fallback;
 }
 
 function mapAuthUser(raw: any = {}, fallbackUsername = ""): AuthUser {
@@ -64,6 +81,37 @@ function readUser(response: any, fallbackUsername = "") {
 
 function readTwoFactorUserId(user: AuthUser, rawUser: any = {}) {
   return numberValue(rawUser.emaUserID ?? rawUser.id ?? user.id, 0);
+}
+
+function readTwoFactorStatus(response: any): TwoFactorStatus {
+  const data = response?.data || response?.user || response || {};
+  const user = response?.user || response?.data?.user || data?.user || {};
+  const enabled = booleanValue(
+    data?.enabled ??
+      data?.twoFactorEnabled ??
+      data?.twoFactorActive ??
+      data?.isTwoFactorEnabled ??
+      data?.mfaEnabled ??
+      user?.twoFactorEnabled ??
+      user?.mfaEnabled,
+    false
+  );
+
+  return {
+    enabled,
+    setupRequired: booleanValue(data?.setupRequired ?? data?.twoFactorSetupRequired, false),
+    message: text(data?.message, ""),
+  };
+}
+
+async function tryApiRequest<T>(endpoint: string, options: any = {}) {
+  try {
+    return await apiRequest<T>(endpoint, options);
+  } catch (error: any) {
+    const status = Number(error?.status || 0);
+    if (status === 404 || status === 405) return null;
+    throw error;
+  }
 }
 
 async function buildTwoFactorChallenge(response: any, fallbackUsername: string) {
@@ -177,6 +225,47 @@ export async function verifyTwoFactor(
 export async function getCurrentUser() {
   const response = await apiRequest("/api/auth/me");
   return readUser(response);
+}
+
+export async function getTwoFactorStatus(): Promise<TwoFactorStatus> {
+  const statusResponse = await tryApiRequest<any>("/api/auth/2fa/status");
+  if (statusResponse) return readTwoFactorStatus(statusResponse);
+
+  const meResponse = await tryApiRequest<any>("/api/auth/me");
+  if (meResponse) return readTwoFactorStatus(meResponse);
+
+  throw new Error("2FA status endpoint is not available on the backend.");
+}
+
+export async function updateTwoFactorStatus(enabled: boolean): Promise<TwoFactorStatus> {
+  const endpointList = enabled
+    ? [
+        { endpoint: "/api/auth/2fa/enable", method: "POST" },
+        { endpoint: "/api/auth/2fa/status", method: "PATCH" },
+        { endpoint: "/api/auth/2fa/toggle", method: "POST" },
+      ]
+    : [
+        { endpoint: "/api/auth/2fa/disable", method: "POST" },
+        { endpoint: "/api/auth/2fa/status", method: "PATCH" },
+        { endpoint: "/api/auth/2fa/toggle", method: "POST" },
+      ];
+
+  for (const item of endpointList) {
+    const response = await tryApiRequest<any>(item.endpoint, {
+      method: item.method,
+      body: { enabled },
+    });
+
+    if (response) {
+      const status = readTwoFactorStatus(response);
+      return {
+        ...status,
+        enabled: status.enabled || enabled,
+      };
+    }
+  }
+
+  throw new Error("2FA update endpoint is not available on the backend.");
 }
 
 export async function isLoggedIn() {
