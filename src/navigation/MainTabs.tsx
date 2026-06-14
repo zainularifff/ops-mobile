@@ -1,17 +1,15 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { BarChart3, FileText, Settings, ShieldCheck } from "lucide-react-native";
+import { BarChart3, FileText, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import OverviewStack from "./OverviewStack";
-import OperationsStack from "./OperationsStack";
 import ReportsStack from "./ReportsStack";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import { colors } from "../theme/colors";
 
 export type MainTabParamList = {
   Overview: undefined;
-  Operator: undefined;
   Reports: undefined;
   Settings: undefined;
 };
@@ -53,9 +51,6 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
         },
         tabBarIcon: ({ color, size }) => {
           const iconSize = Math.max(size || 20, 20);
-          if (route.name === "Operator") {
-            return <ShieldCheck size={iconSize} color={color} strokeWidth={2.65} />;
-          }
           if (route.name === "Reports") {
             return <FileText size={iconSize} color={color} strokeWidth={2.65} />;
           }
@@ -67,7 +62,6 @@ export default function MainTabs({ onLogout }: MainTabsProps) {
       })}
     >
       <Tab.Screen name="Overview" component={OverviewStack} />
-      <Tab.Screen name="Operator" component={OperationsStack} />
       <Tab.Screen name="Reports" component={ReportsStack} />
       <Tab.Screen name="Settings">
         {() => <SettingsScreen onLogout={onLogout} />}
