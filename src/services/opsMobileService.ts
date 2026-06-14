@@ -107,22 +107,23 @@ export async function fetchWorklistItems(): Promise<MobileWorkItem[]> {
   return rows.map((task: any, index: number) => {
     const type = mapTaskType(task);
     const priority = mapTaskPriority(task);
-    const status = cleanText(task?.state || task?.rawState, "Open");
-    const title = cleanText(task?.description, `Task ${task?.jobId || index + 1}`);
+    const status = cleanText(task?.state || task?.rawState);
+    const title = cleanText(task?.description || task?.title || task?.name);
+    const idValue = task?.jobId || task?.id || task?.Job_Idn || task?.Task_ID;
 
     return {
-      id: `JOB-${task?.jobId || task?.id || index + 1}`,
+      id: cleanText(idValue, `row-${index + 1}`),
       type,
       title,
-      source: cleanText(task?.commandType || task?.classification, "Task List"),
-      site: cleanText(task?.raw?.Object_Full_Name || task?.raw?.Object_Rel_Name || task?.targetName, "All Branches"),
+      source: cleanText(task?.commandType || task?.classification),
+      site: cleanText(task?.raw?.Object_Full_Name || task?.raw?.Object_Rel_Name || task?.targetName),
       priority,
       status,
-      due: cleanText(task?.scheduledTime || task?.startTime, "Review"),
-      updated: cleanText(task?.startTime || task?.endTime, "-"),
-      owner: cleanText(task?.orderedBy, "Operations"),
-      reason: cleanText(task?.effectiveStatusReason, `${status} task requires operational review.`),
-      action: priority === "High" ? "Review failed or stopped task and confirm target endpoint condition." : "Review task progress and target status.",
+      due: cleanText(task?.scheduledTime || task?.startTime),
+      updated: cleanText(task?.startTime || task?.endTime),
+      owner: cleanText(task?.orderedBy),
+      reason: cleanText(task?.effectiveStatusReason),
+      action: cleanText(task?.action || task?.recommendedAction),
     };
   });
 }
@@ -136,17 +137,17 @@ export async function fetchReportCatalog(): Promise<MobileReportItem[]> {
       : [];
 
   return rows.map((item: any, index: number) => ({
-    id: cleanText(item?.id, `RPT-${index + 1}`),
-    title: cleanText(item?.title, "EMA OPS Report"),
-    description: cleanText(item?.description, "Operational report summary."),
+    id: cleanText(item?.id || item?.reportId || item?.key, `report-${index + 1}`),
+    title: cleanText(item?.title || item?.name),
+    description: cleanText(item?.description || item?.summary),
     category: cleanText(item?.category || item?.icon, "executive"),
-    type: cleanText(item?.type, "Summary"),
-    source: cleanText(item?.source, "EMA System"),
-    outputs: Array.isArray(item?.outputs) ? item.outputs : ["PDF"],
-    status: "Ready",
-    tone: "blue",
-    pages: 1,
-    frequency: "On Demand",
-    lastGenerated: "Not generated yet",
+    type: cleanText(item?.type, ""),
+    source: cleanText(item?.source, ""),
+    outputs: Array.isArray(item?.outputs) ? item.outputs : [],
+    status: cleanText(item?.status, ""),
+    tone: item?.tone || "blue",
+    pages: asNumber(item?.pages, 0),
+    frequency: cleanText(item?.frequency, ""),
+    lastGenerated: cleanText(item?.lastGenerated || item?.generatedAt, ""),
   }));
 }
