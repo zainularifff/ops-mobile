@@ -11,7 +11,18 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertTriangle, ArrowRight, FileText, MapPin, RefreshCcw, Ticket } from "lucide-react-native";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Clock3,
+  FileText,
+  MapPin,
+  RefreshCcw,
+  Server,
+  Ticket,
+  Wifi,
+  WifiOff,
+} from "lucide-react-native";
 
 import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
@@ -131,6 +142,7 @@ export default function OverviewHomeScreen() {
             progress={100}
             progressLabel="Inventory scope"
             toneName="blue"
+            icon={Server}
             onPress={() => openEndpointList("all")}
           />
           <EndpointActionCard
@@ -140,6 +152,7 @@ export default function OverviewHomeScreen() {
             progress={onlineRate}
             progressLabel={`${onlineRate}% online coverage`}
             toneName="green"
+            icon={Wifi}
             onPress={() => openEndpointList("online")}
           />
           <EndpointActionCard
@@ -149,6 +162,7 @@ export default function OverviewHomeScreen() {
             progress={offlineRate}
             progressLabel={`${offlineRate}% require follow-up`}
             toneName="red"
+            icon={WifiOff}
             onPress={() => openEndpointList("offline")}
           />
           <EndpointActionCard
@@ -158,6 +172,7 @@ export default function OverviewHomeScreen() {
             progress={staleRate}
             progressLabel={`${staleRate}% stale telemetry`}
             toneName="amber"
+            icon={Clock3}
             onPress={() => openEndpointList("stale")}
           />
         </View>
@@ -220,6 +235,7 @@ function EndpointActionCard({
   progress,
   progressLabel,
   toneName,
+  icon: Icon,
   onPress,
 }: {
   title: string;
@@ -228,6 +244,7 @@ function EndpointActionCard({
   progress: number;
   progressLabel: string;
   toneName: EndpointTone;
+  icon: any;
   onPress: () => void;
 }) {
   const t = tone[toneName];
@@ -236,11 +253,14 @@ function EndpointActionCard({
   return (
     <TouchableOpacity style={styles.endpointCard} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
-        <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}25` }]} />
-        <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}45` }]} />
-        <View style={[styles.deviceBase, { borderColor: `${t.main}55` }]}>
-          <View style={[styles.deviceLine, { backgroundColor: t.main }]} />
-          <View style={[styles.deviceLineShort, { backgroundColor: `${t.main}AA` }]} />
+        <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}22` }]} />
+        <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}36` }]} />
+        <View style={[styles.artIconHalo, { backgroundColor: `${t.main}18` }]} />
+        <View style={[styles.artIconPlate, { borderColor: `${t.main}35`, shadowColor: t.main }]}>
+          <Icon size={42} color={t.main} strokeWidth={2.35} />
+        </View>
+        <View style={[styles.artMiniBadge, { backgroundColor: t.main }]}> 
+          <ArrowRight size={11} color="#FFFFFF" strokeWidth={3} />
         </View>
       </LinearGradient>
 
@@ -300,8 +320,8 @@ function SmallFeatureCard({
     <TouchableOpacity style={styles.featureCardWrap} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={colors as any} style={styles.featureCard}>
         <View style={styles.featureTopRow}>
-          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}>
-            {icon === "geo" ? <MapPin size={18} color={accent} strokeWidth={2.7} /> : <FileText size={18} color={accent} strokeWidth={2.7} />}
+          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}> 
+            {icon === "geo" ? <MapPin size={20} color={accent} strokeWidth={2.7} /> : <FileText size={20} color={accent} strokeWidth={2.7} />}
           </View>
           <ArrowRight size={15} color={accent} strokeWidth={2.8} />
         </View>
@@ -390,11 +410,34 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   deviceArtwork: { width: 100, minHeight: 118, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  artOrbLarge: { position: "absolute", width: 82, height: 82, borderRadius: 82, top: 14, right: -20 },
-  artOrbSmall: { position: "absolute", width: 46, height: 46, borderRadius: 46, bottom: 14, left: -8 },
-  deviceBase: { width: 58, height: 70, borderRadius: 18, borderWidth: 2, backgroundColor: "rgba(255,255,255,0.78)", padding: 10, justifyContent: "center" },
-  deviceLine: { height: 6, borderRadius: 6, marginBottom: 8 },
-  deviceLineShort: { width: 28, height: 6, borderRadius: 6 },
+  artOrbLarge: { position: "absolute", width: 92, height: 92, borderRadius: 92, top: 8, right: -25 },
+  artOrbSmall: { position: "absolute", width: 52, height: 52, borderRadius: 52, bottom: 10, left: -10 },
+  artIconHalo: { position: "absolute", width: 76, height: 76, borderRadius: 28, transform: [{ rotate: "-10deg" }] },
+  artIconPlate: {
+    width: 68,
+    height: 68,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    backgroundColor: "rgba(255,255,255,0.86)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  artMiniBadge: {
+    position: "absolute",
+    right: 16,
+    bottom: 18,
+    width: 24,
+    height: 24,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.82)",
+  },
   endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
   endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   endpointTitleWrap: { flex: 1, paddingRight: 10 },
@@ -438,7 +481,7 @@ const styles = StyleSheet.create({
   featureCardWrap: { flex: 1, borderRadius: 26, overflow: "hidden", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
   featureCard: { minHeight: 158, padding: 14, borderRadius: 26, borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
   featureTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  featureIcon: { width: 42, height: 42, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  featureIcon: { width: 44, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   featureTitle: { color: c.ink, fontSize: 15, fontWeight: "900", marginTop: 16, letterSpacing: -0.3 },
   featureSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", lineHeight: 15, marginTop: 5, minHeight: 32 },
   featureValue: { marginTop: "auto", fontSize: 11, fontWeight: "900" },
