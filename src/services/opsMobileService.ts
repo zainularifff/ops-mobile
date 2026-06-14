@@ -77,6 +77,23 @@ export type MobileEndpointDevice = {
 
 export type EndpointDeviceStatusFilter = "all" | "online" | "offline" | "stale";
 
+export type MobileGeolocationDevice = MobileEndpointDevice & {
+  hasLocation: boolean;
+  latestLocation: MobileDeviceLocation | null;
+  locationCount: number;
+};
+
+export type MobileGeolocationSummary = {
+  generatedAt: string;
+  totalDevices: number;
+  detectedCount: number;
+  notDetectedCount: number;
+  detectedDevices: MobileGeolocationDevice[];
+  notDetectedDevices: MobileGeolocationDevice[];
+};
+
+export type GeolocationDeviceFilter = "detected" | "notDetected";
+
 export type MobileOpsSnapshot = {
   generatedAt: string;
   rangeLabel: string;
@@ -100,6 +117,11 @@ type EndpointDeviceFetchOptions = FetchOptions & {
   status?: EndpointDeviceStatusFilter;
 };
 
+type GeolocationFetchOptions = FetchOptions & {
+  endpointLimit?: number;
+  locationLimit?: number;
+};
+
 type CacheEntry<T> = {
   expiresAt: number;
   value: T;
@@ -108,15 +130,18 @@ type CacheEntry<T> = {
 const SNAPSHOT_CACHE_KEY = "mobile-ops-snapshot";
 const SUMMARY_CACHE_KEY = "operations-summary";
 const REPORTS_CACHE_KEY = "report-catalog";
+const GEOLOCATION_SUMMARY_CACHE_KEY = "mobile-geolocation-summary";
 const SUMMARY_CACHE_TTL_MS = 60 * 1000;
 const SNAPSHOT_CACHE_TTL_MS = 45 * 1000;
 const WORKLIST_CACHE_TTL_MS = 30 * 1000;
 const REPORTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const ENDPOINT_DEVICES_CACHE_TTL_MS = 45 * 1000;
+const GEOLOCATION_CACHE_TTL_MS = 45 * 1000;
 const DEFAULT_WORKLIST_LIMIT = 25;
 const DEFAULT_ENDPOINT_DEVICE_LIMIT = 300;
-const GEOLOCATION_REQUEST_LIMIT = 300;
+const GEOLOCATION_REQUEST_LIMIT = 1000;
 const GEOLOCATION_DISPLAY_LIMIT = 30;
+const DEVICE_LOCATION_HISTORY_LIMIT = 10;
 const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 const liveDataCache = new Map<string, CacheEntry<unknown>>();
@@ -130,6 +155,14 @@ function endpointDeviceCacheKey(limit: number) {
   return `endpoint-devices-${limit}`;
 }
 
+function geolocationSummaryCacheKey(endpointLimit: number, locationLimit: number) {
+  return `${GEOLOCATION_SUMMARY_CACHE_KEY}-${endpointLimit}-${locationLimit}`;
+}
+
+function locationHistoryCacheKey(deviceKey: string, locationLimit: number) {
+  return `location-history-${deviceKey}-${locationLimit}`;
+}
+
 function clampWorklistLimit(value?: number) {
   const parsed = Number(value || DEFAULT_WORKLIST_LIMIT);
   if (!Number.isFinite(parsed)) return DEFAULT_WORKLIST_LIMIT;
@@ -140,6 +173,12 @@ function clampEndpointDeviceLimit(value?: number) {
   const parsed = Number(value || DEFAULT_ENDPOINT_DEVICE_LIMIT);
   if (!Number.isFinite(parsed)) return DEFAULT_ENDPOINT_DEVICE_LIMIT;
   return Math.max(1, Math.min(Math.round(parsed), 1000));
+}
+
+function clampGeolocationLimit(value?: number) {
+  const parsed = Number(value || GEOLOCATION_REQUEST_LIMIT);
+  if (!Number.isFinite(parsed)) return GEOLOCATION_REQUEST_LIMIT;
+  return Math.max(1, Math.min(Math.round(parsed), 3000));
 }
 
 function getCachedValue<T>(key: string): T | null {
@@ -224,6 +263,10 @@ export function getCachedEndpointDevices(limit = DEFAULT_ENDPOINT_DEVICE_LIMIT) 
 
 export function getCachedReportCatalog() {
   return getCachedValue<MobileReportItem[]>(REPORTS_CACHE_KEY);
+}
+
+export function getCachedGeolocationSummary(endpointLimit = DEFAULT_ENDPOINT_DEVICE_LIMIT, locationLimit = GEOLOCATION_REQUEST_LIMIT) {
+  return getCachedValue<MobileGeolocationSummary>(geolocationSummaryCacheKey(clampEndpointDeviceLimit(endpointLimit), clampGeolocationLimit(locationLimit)));
 }
 
 function cleanText(value: unknown, fallback = "-") {
@@ -321,6 +364,7 @@ function getLocationDeviceKey(row: any, index: number) {
       row?.ComputerName ||
       row?.DeviceName ||
       row?.Object_Client_Name ||
+      row?.HostName ||
       row?.SerialNumber,
     `device-${index + 1}`
   );
@@ -356,7 +400,7 @@ function mapDeviceLocation(row: any, index: number): MobileDeviceLocation {
   };
 }
 
-function mapLatestDeviceLocations(rows: any[]): { locations: MobileDeviceLocation[]; total: number } {
+function mapLatestDeviceLocations(rows: any[], displayLimit = GEOLOCATION_DISPLAY_LIMIT): { locations: MobileDeviceLocation[]; total: number } {
   const latestByDevice = new Map<string, { row: any; index: number; time: number }>();
 
   rows.forEach((row, index) => {
@@ -374,7 +418,7 @@ function mapLatestDeviceLocations(rows: any[]): { locations: MobileDeviceLocatio
     .map((item, index) => mapDeviceLocation(item.row, index));
 
   return {
-    locations: locations.slice(0, GEOLOCATION_DISPLAY_LIMIT),
+    locations: locations.slice(0, displayLimit),
     total: locations.length,
   };
 }
@@ -427,6 +471,78 @@ function filterEndpointDevices(devices: MobileEndpointDevice[], status: Endpoint
   if (status === "offline") return devices.filter((item) => !item.isOnline);
   if (status === "stale") return devices.filter((item) => item.isStale);
   return devices;
+}
+
+function getEndpointMatchKeys(device: MobileEndpointDevice) {
+  return [
+    device.deviceId,
+    device.deviceName,
+    device.id,
+  ]
+    .map((value) => normalizeKeyPart(value, ""))
+    .filter(Boolean);
+}
+
+function getLocationMatchKeys(location: MobileDeviceLocation) {
+  return [
+    location.deviceId,
+    location.deviceName,
+  ]
+    .map((value) => normalizeKeyPart(value, ""))
+    .filter(Boolean);
+}
+
+function locationMatchesDevice(location: MobileDeviceLocation, device: MobileEndpointDevice) {
+  const endpointKeys = new Set(getEndpointMatchKeys(device));
+  return getLocationMatchKeys(location).some((key) => endpointKeys.has(key));
+}
+
+function mapGeolocationSummary(devices: MobileEndpointDevice[], locationRows: any[]): MobileGeolocationSummary {
+  const allLocations = locationRows
+    .map((row, index) => mapDeviceLocation(row, index))
+    .sort((a, b) => getDateSortValue(b.rawTime) - getDateSortValue(a.rawTime));
+
+  const historyByDeviceKey = new Map<string, MobileDeviceLocation[]>();
+  allLocations.forEach((location) => {
+    getLocationMatchKeys(location).forEach((key) => {
+      if (!historyByDeviceKey.has(key)) historyByDeviceKey.set(key, []);
+      historyByDeviceKey.get(key)?.push(location);
+    });
+  });
+
+  const mappedDevices = devices.map((device) => {
+    const keys = getEndpointMatchKeys(device);
+    const seenLocationIds = new Set<string>();
+    const deviceLocations: MobileDeviceLocation[] = [];
+
+    keys.forEach((key) => {
+      const rows = historyByDeviceKey.get(key) || [];
+      rows.forEach((row) => {
+        if (!seenLocationIds.has(row.id)) {
+          seenLocationIds.add(row.id);
+          deviceLocations.push(row);
+        }
+      });
+    });
+
+    deviceLocations.sort((a, b) => getDateSortValue(b.rawTime) - getDateSortValue(a.rawTime));
+
+    return {
+      ...device,
+      hasLocation: deviceLocations.length > 0,
+      latestLocation: deviceLocations[0] || null,
+      locationCount: deviceLocations.length,
+    };
+  });
+
+  return {
+    generatedAt: formatDateTime(new Date().toISOString()),
+    totalDevices: mappedDevices.length,
+    detectedCount: mappedDevices.filter((item) => item.hasLocation).length,
+    notDetectedCount: mappedDevices.filter((item) => !item.hasLocation).length,
+    detectedDevices: mappedDevices.filter((item) => item.hasLocation),
+    notDetectedDevices: mappedDevices.filter((item) => !item.hasLocation),
+  };
 }
 
 function mapTaskType(task: any): MobileWorkItem["type"] {
@@ -565,6 +681,61 @@ export async function fetchEndpointDevices(
   return filterEndpointDevices(devices, status);
 }
 
+async function requestAllDeviceLocationRows(locationLimit: number) {
+  const response: any = await apiRequest(`/api/geolocation/all-live?limit=${locationLimit}`);
+  return getRows(response);
+}
+
+async function requestDeviceLocations() {
+  const rows = await requestAllDeviceLocationRows(GEOLOCATION_REQUEST_LIMIT);
+  return mapLatestDeviceLocations(rows);
+}
+
+export async function fetchGeolocationSummary(
+  options: GeolocationFetchOptions = {}
+): Promise<MobileGeolocationSummary> {
+  const endpointLimit = clampEndpointDeviceLimit(options.endpointLimit);
+  const locationLimit = clampGeolocationLimit(options.locationLimit);
+
+  return fetchWithCache(
+    geolocationSummaryCacheKey(endpointLimit, locationLimit),
+    GEOLOCATION_CACHE_TTL_MS,
+    async () => {
+      const [devices, locationRows] = await Promise.all([
+        fetchEndpointDevices({ status: "all", limit: endpointLimit, force: options.force }),
+        requestAllDeviceLocationRows(locationLimit),
+      ]);
+
+      return mapGeolocationSummary(devices, locationRows);
+    },
+    options
+  );
+}
+
+export async function fetchDeviceLocationHistory(
+  device: Pick<MobileGeolocationDevice, "deviceId" | "deviceName">,
+  options: GeolocationFetchOptions & { limit?: number } = {}
+): Promise<MobileDeviceLocation[]> {
+  const locationLimit = clampGeolocationLimit(options.locationLimit);
+  const historyLimit = Math.max(1, Math.min(Number(options.limit || DEVICE_LOCATION_HISTORY_LIMIT), 50));
+  const deviceKey = normalizeKeyPart(device.deviceId || device.deviceName, "device");
+
+  return fetchWithCache(
+    locationHistoryCacheKey(deviceKey, locationLimit),
+    GEOLOCATION_CACHE_TTL_MS,
+    async () => {
+      const rows = await requestAllDeviceLocationRows(locationLimit);
+      const allLocations = rows
+        .map((row, index) => mapDeviceLocation(row, index))
+        .filter((location) => locationMatchesDevice(location, { ...device, id: device.deviceId, branch: "", status: "Unknown", isOnline: false, isStale: false, lastSeen: "", rawLastSeen: "", model: "", platform: "", ipAddress: "", source: "" }))
+        .sort((a, b) => getDateSortValue(b.rawTime) - getDateSortValue(a.rawTime));
+
+      return allLocations.slice(0, historyLimit);
+    },
+    options
+  );
+}
+
 async function requestReportCatalog(): Promise<MobileReportItem[]> {
   const response: any = await apiRequest("/api/reports/catalog");
   const rows = Array.isArray(response?.reports)
@@ -603,11 +774,6 @@ export async function fetchReportCatalog(
     requestReportCatalog,
     options
   );
-}
-
-async function requestDeviceLocations() {
-  const response: any = await apiRequest(`/api/geolocation/all-live?limit=${GEOLOCATION_REQUEST_LIMIT}`);
-  return mapLatestDeviceLocations(getRows(response));
 }
 
 async function requestMobileOpsSnapshot(): Promise<MobileOpsSnapshot> {
