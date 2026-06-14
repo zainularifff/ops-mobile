@@ -4,6 +4,12 @@ import * as Sharing from "expo-sharing";
 import type { MobileOpsSnapshot } from "./opsMobileService";
 import type { MobileReportTemplate } from "../config/mobileReports";
 
+export type MobileReportPdfResult = {
+  uri: string;
+  shared: boolean;
+  shareError?: string;
+};
+
 function esc(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -67,7 +73,7 @@ function buildInsights(report: MobileReportTemplate, snapshot: MobileOpsSnapshot
   ];
 }
 
-function buildActions(report: MobileReportTemplate, snapshot: MobileOpsSnapshot) {
+function buildActions(report: MobileReportTemplate) {
   if (report.id === "endpointCoverage") {
     return [
       "Validate offline endpoints by branch before escalating to field support.",
@@ -96,10 +102,13 @@ export function buildMobileReportHtml(report: MobileReportTemplate, snapshot: Mo
   const geo = Math.round(geolocationRate(snapshot));
   const attention = snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded;
   const insights = buildInsights(report, snapshot);
-  const actions = buildActions(report, snapshot);
+  const actions = buildActions(report);
   const workload = Math.max(snapshot.tickets.open + snapshot.tickets.closed, snapshot.tickets.total, 1);
   const openPct = Math.round((snapshot.tickets.open / workload) * 100);
   const closedPct = Math.round((snapshot.tickets.closed / workload) * 100);
+  const totalEndpoints = Math.max(snapshot.endpoints.total, 1);
+  const offlinePct = Math.round((snapshot.endpoints.offline / totalEndpoints) * 100);
+  const stalePct = Math.max(0, 100 - online - offlinePct);
 
   return `
 <!doctype html>
@@ -133,8 +142,8 @@ export function buildMobileReportHtml(report: MobileReportTemplate, snapshot: Mo
   .fill { height: 10px; border-radius: 999px; background: ${report.accent}; }
   .stack { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #e8edf5; margin-top: 10px; }
   .online { background: #159A6A; width: ${pct(online)}; }
-  .offline { background: #D45264; width: ${pct(Math.round((snapshot.endpoints.offline / Math.max(snapshot.endpoints.total, 1)) * 100))}; }
-  .stale { background: #C27A13; flex: 1; }
+  .offline { background: #D45264; width: ${pct(offlinePct)}; }
+  .stale { background: #C27A13; width: ${pct(stalePct)}; }
   ul { margin: 0; padding-left: 18px; }
   li { margin: 8px 0; color: #344054; font-size: 12px; line-height: 1.45; }
   .action { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf1f6; }
@@ -202,17 +211,26 @@ export function buildMobileReportHtml(report: MobileReportTemplate, snapshot: Mo
 </html>`;
 }
 
-export async function generateAndShareMobileReport(report: MobileReportTemplate, snapshot: MobileOpsSnapshot) {
+export async function generateAndShareMobileReport(report: MobileReportTemplate, snapshot: MobileOpsSnapshot): Promise<MobileReportPdfResult> {
   const html = buildMobileReportHtml(report, snapshot);
   const result = await Print.printToFileAsync({ html, base64: false });
+  let shared = false;
+  let shareError = "";
 
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(result.uri, {
-      mimeType: "application/pdf",
-      dialogTitle: report.pdfTitle,
-      UTI: "com.adobe.pdf",
-    });
+  try {
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(result.uri, {
+        mimeType: "application/pdf",
+        dialogTitle: report.pdfTitle,
+        UTI: "com.adobe.pdf",
+      });
+      shared = true;
+    } else {
+      shareError = "Sharing is not available on this device. PDF was still generated.";
+    }
+  } catch (err) {
+    shareError = err instanceof Error ? err.message : String(err || "PDF generated, but sharing failed.");
   }
 
-  return result.uri;
+  return { uri: result.uri, shared, shareError: shareError || undefined };
 }
