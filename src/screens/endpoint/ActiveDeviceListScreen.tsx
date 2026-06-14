@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,424 +11,257 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
-  ArrowLeft,
+  AlertTriangle,
   CheckCircle2,
   Clock3,
   MapPin,
   MonitorCog,
-  RadioTower,
-  UserRound,
+  RefreshCcw,
+  Server,
+  WifiOff,
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import {
+  fetchEndpointDevices,
+  type EndpointDeviceStatusFilter,
+  type MobileEndpointDevice,
+} from "../../services/opsMobileService";
 import { colors } from "../../theme/colors";
 import { formatNumber } from "../../utils/formatters";
 
-const activeDeviceRecords = [
-  {
-    device: "KL-HQ-LAP-014",
-    user: "Finance User",
-    site: "Kuala Lumpur HQ",
-    status: "Active",
-    lastSeen: "5 min ago",
-    connectionWindow: "Today",
-    health: "Normal",
-    risk: "Low",
+const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string; icon: any }> = {
+  all: {
+    title: "Managed Endpoints",
+    subtitle: "Live endpoint list from hardware inventory.",
+    tone: colors.blue,
+    icon: Server,
   },
-  {
-    device: "JPJ-PUTRAJAYA-WS-021",
-    user: "Operation User",
-    site: "Putrajaya",
-    status: "Active",
-    lastSeen: "8 min ago",
-    connectionWindow: "Today",
-    health: "Normal",
-    risk: "Low",
+  online: {
+    title: "Online Devices",
+    subtitle: "Devices currently reporting as online.",
+    tone: colors.green,
+    icon: CheckCircle2,
   },
-  {
-    device: "SHAH-ALAM-LAP-077",
-    user: "Support User",
-    site: "Shah Alam",
-    status: "Active",
-    lastSeen: "14 min ago",
-    connectionWindow: "Today",
-    health: "Normal",
-    risk: "Low",
+  offline: {
+    title: "Offline Devices",
+    subtitle: "Devices currently not reporting or disconnected.",
+    tone: colors.red,
+    icon: WifiOff,
   },
-  {
-    device: "JB-OPS-PC-119",
-    user: "Branch User",
-    site: "Johor Bahru",
-    status: "Recently Active",
-    lastSeen: "2 days ago",
-    connectionWindow: "Last 7 Days",
-    health: "Monitor",
-    risk: "Low",
+  stale: {
+    title: "Stale Devices",
+    subtitle: "Devices with old telemetry based on latest connection time.",
+    tone: colors.amber,
+    icon: Clock3,
   },
-  {
-    device: "KL-HQ-WS-204",
-    user: "Admin User",
-    site: "Kuala Lumpur HQ",
-    status: "Recently Active",
-    lastSeen: "4 days ago",
-    connectionWindow: "Last 7 Days",
-    health: "Monitor",
-    risk: "Low",
-  },
-  {
-    device: "PUTRAJAYA-LAP-045",
-    user: "Field User",
-    site: "Putrajaya",
-    status: "Recently Active",
-    lastSeen: "6 days ago",
-    connectionWindow: "Last 7 Days",
-    health: "Monitor",
-    risk: "Low",
-  },
-];
+};
+
+function resolveFilter(value: unknown): EndpointDeviceStatusFilter {
+  const text = String(value || "all").toLowerCase();
+  if (text === "online" || text === "today") return "online";
+  if (text === "offline") return "offline";
+  if (text === "stale") return "stale";
+  return "all";
+}
 
 export default function ActiveDeviceListScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
+  const filter = resolveFilter(route.params?.status || route.params?.filter);
+  const config = titleMap[filter];
+  const Icon = config.icon;
 
-  const params = route.params || {};
+  const [records, setRecords] = useState<MobileEndpointDevice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
 
-  const title = params.title || "Active Devices";
-  const subtitle =
-    params.subtitle || "Devices currently reporting or recently active.";
-  const filter = params.filter || "today";
-  const site = params.site;
+  const onlineCount = useMemo(() => records.filter((item) => item.isOnline).length, [records]);
+  const staleCount = useMemo(() => records.filter((item) => item.isStale).length, [records]);
 
-  const records = activeDeviceRecords.filter((item) => {
-    if (filter === "today") return item.connectionWindow === "Today";
-    if (filter === "last7") return item.connectionWindow === "Last 7 Days";
-    if (filter === "site") return item.site === site;
-    return true;
-  });
+  const loadDevices = useCallback(async (force = false) => {
+    if (force) setRefreshing(true);
+    else setLoading(true);
 
-  function openDevice(record: any) {
+    try {
+      const liveDevices = await fetchEndpointDevices({ status: filter, limit: 300, force });
+      setRecords(liveDevices);
+      setError("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err || "Failed to load endpoint devices."));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    loadDevices(false);
+  }, [loadDevices]);
+
+  function openDevice(record: MobileEndpointDevice) {
     navigation.navigate("DeviceQuickView", {
-      device: record.device,
-      site: record.site,
-      status: record.status,
+      device: record.deviceName,
+      site: record.branch,
+      status: record.isStale ? "Stale" : record.status,
       lastSeen: record.lastSeen,
-      risk: record.risk,
-      category: "Active Device Coverage",
-      action:
-        "Device is currently reporting normally. Continue monitoring through EMA. Full device profile remains in the main web system.",
+      risk: record.isOnline && !record.isStale ? "Low" : record.isStale ? "Medium" : "High",
+      category: config.title,
+      action: `Source: ${record.source} · ${record.platform} · ${record.model} · IP ${record.ipAddress}`,
     });
   }
 
   return (
     <ScrollView
       style={styles.page}
-      contentContainerStyle={[
-        styles.container,
-        { paddingTop: insets.top + 24 },
-      ]}
+      contentContainerStyle={[styles.container, { paddingTop: insets.top + 18 }]}
       showsVerticalScrollIndicator={false}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadDevices(true)} />}
     >
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-        activeOpacity={0.85}
-      >
-        <ArrowLeft size={20} color={colors.text} strokeWidth={2.7} />
-        <Text style={styles.backText}>Back</Text>
-      </TouchableOpacity>
-
-      <View style={styles.header}>
-        <Text style={styles.eyebrow}>ACTIVE DEVICE LIST</Text>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.subtitle}>{subtitle}</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.eyebrow}>ENDPOINT MANAGEMENT</Text>
+          <Text style={styles.title}>{config.title}</Text>
+          <Text style={styles.subtitle}>{config.subtitle}</Text>
+        </View>
+        <TouchableOpacity style={styles.refreshButton} activeOpacity={0.85} onPress={() => loadDevices(true)}>
+          {loading || refreshing ? (
+            <ActivityIndicator size="small" color={colors.white} />
+          ) : (
+            <RefreshCcw size={18} color={colors.white} strokeWidth={2.8} />
+          )}
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.heroCard}>
-        <View style={styles.heroIcon}>
-          <CheckCircle2 size={25} color={colors.white} strokeWidth={2.7} />
+      <View style={[styles.heroCard, { borderColor: `${config.tone}30` }]}>
+        <View style={[styles.heroIcon, { backgroundColor: config.tone }]}>
+          <Icon size={24} color={colors.white} strokeWidth={2.8} />
         </View>
-
-        <Text style={styles.heroTitle}>Reporting Normally</Text>
-        <Text style={styles.heroDesc}>
-          This list shows selected active devices suitable for mobile monitoring.
-          Full inventory remains in the main EMA web system.
-        </Text>
-
-        <View style={styles.heroMetricRow}>
-          <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>
-              {formatNumber(records.length)}
-            </Text>
-            <Text style={styles.heroMetricLabel}>Preview Devices</Text>
-          </View>
-
-          <View style={styles.heroDivider} />
-
-          <View style={styles.heroMetric}>
-            <Text style={styles.heroMetricValue}>Normal</Text>
-            <Text style={styles.heroMetricLabel}>Health Status</Text>
-          </View>
+        <View style={styles.heroCopy}>
+          <Text style={styles.heroLabel}>Live device records</Text>
+          <Text style={styles.heroValue}>{formatNumber(records.length)}</Text>
+          <Text style={styles.heroText}>Data source: hardware inventory assets</Text>
         </View>
+      </View>
+
+      {error ? (
+        <View style={styles.errorCard}>
+          <AlertTriangle size={18} color={colors.red} strokeWidth={2.8} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
+
+      <View style={styles.summaryRow}>
+        <MiniStat label="Online" value={onlineCount} color={colors.green} />
+        <MiniStat label="Offline" value={Math.max(records.length - onlineCount, 0)} color={colors.red} />
+        <MiniStat label="Stale" value={staleCount} color={colors.amber} />
       </View>
 
       <View style={styles.listPanel}>
-        {records.map((record, index) => (
-          <TouchableOpacity
-            key={record.device}
-            style={[
-              styles.deviceRow,
-              index === records.length - 1 && styles.rowLast,
-            ]}
-            activeOpacity={0.85}
-            onPress={() => openDevice(record)}
-          >
-            <View style={styles.deviceIcon}>
-              <MonitorCog size={18} color={colors.green} strokeWidth={2.7} />
-            </View>
-
-            <View style={styles.deviceTextWrap}>
-              <Text style={styles.deviceName}>{record.device}</Text>
-
-              <View style={styles.metaRow}>
-                <MapPin size={12} color={colors.muted} strokeWidth={2.6} />
-                <Text style={styles.deviceMeta}>{record.site}</Text>
+        {loading && records.length === 0 ? (
+          <View style={styles.loadingBlock}>
+            <ActivityIndicator size="small" color={config.tone} />
+            <Text style={styles.loadingText}>Loading live devices...</Text>
+          </View>
+        ) : records.length === 0 ? (
+          <View style={styles.emptyBlock}>
+            <MonitorCog size={22} color={colors.muted} strokeWidth={2.7} />
+            <Text style={styles.emptyTitle}>No device records found</Text>
+            <Text style={styles.emptyText}>No live endpoint matched this filter.</Text>
+          </View>
+        ) : (
+          records.map((record, index) => (
+            <TouchableOpacity
+              key={record.id}
+              style={[styles.deviceRow, index === records.length - 1 && styles.rowLast]}
+              activeOpacity={0.85}
+              onPress={() => openDevice(record)}
+            >
+              <View style={[styles.deviceIcon, { backgroundColor: record.isOnline ? "#EAFBF4" : "#FFF1F1" }]}>
+                {record.isOnline ? (
+                  <CheckCircle2 size={18} color={colors.green} strokeWidth={2.7} />
+                ) : (
+                  <WifiOff size={18} color={colors.red} strokeWidth={2.7} />
+                )}
               </View>
 
-              <View style={styles.metaRow}>
-                <Clock3 size={12} color={colors.muted} strokeWidth={2.6} />
-                <Text style={styles.lastSeen}>Last seen: {record.lastSeen}</Text>
+              <View style={styles.deviceTextWrap}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.deviceName} numberOfLines={1}>{record.deviceName}</Text>
+                  <StatusPill
+                    label={record.isStale ? "Stale" : record.status}
+                    tone={record.isOnline && !record.isStale ? "green" : record.isStale ? "amber" : "red"}
+                  />
+                </View>
+
+                <View style={styles.metaRow}>
+                  <MapPin size={12} color={colors.muted} strokeWidth={2.6} />
+                  <Text style={styles.deviceMeta} numberOfLines={1}>{record.branch}</Text>
+                </View>
+
+                <View style={styles.metaRow}>
+                  <Clock3 size={12} color={colors.muted} strokeWidth={2.6} />
+                  <Text style={styles.lastSeen} numberOfLines={1}>Last seen: {record.lastSeen}</Text>
+                </View>
+
+                <Text style={styles.deviceTechnical} numberOfLines={1}>
+                  {record.platform} · {record.model} · {record.ipAddress}
+                </Text>
               </View>
-
-              <View style={styles.metaRow}>
-                <UserRound size={12} color={colors.muted} strokeWidth={2.6} />
-                <Text style={styles.lastSeen}>{record.user}</Text>
-              </View>
-            </View>
-
-            <View style={styles.statusWrap}>
-              <StatusPill
-                label={record.status === "Active" ? "Active" : "Recent"}
-                tone={record.status === "Active" ? "green" : "blue"}
-              />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.notePanel}>
-        <View style={styles.noteIcon}>
-          <RadioTower size={18} color={colors.cyan} strokeWidth={2.7} />
-        </View>
-
-        <View style={styles.noteTextWrap}>
-          <Text style={styles.noteTitle}>Mobile scope</Text>
-          <Text style={styles.noteText}>
-            This screen only displays selected active records for quick
-            monitoring. Full device history, inventory fields and technical logs
-            remain in the main EMA web system.
-          </Text>
-        </View>
+            </TouchableOpacity>
+          ))
+        )}
       </View>
     </ScrollView>
   );
 }
 
+function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.miniStat}>
+      <Text style={[styles.miniValue, { color }]}>{formatNumber(value)}</Text>
+      <Text style={styles.miniLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    paddingHorizontal: 18,
-    paddingBottom: 110,
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: 16,
-  },
-  backText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: "900",
-    marginLeft: 6,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  eyebrow: {
-    color: colors.green,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 25,
-    fontWeight: "900",
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-
-  heroCard: {
-    backgroundColor: colors.navy,
-    borderRadius: 28,
-    padding: 20,
-    marginBottom: 18,
-  },
-  heroIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 18,
-    backgroundColor: colors.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroTitle: {
-    color: colors.white,
-    fontSize: 22,
-    fontWeight: "900",
-    marginTop: 18,
-  },
-  heroDesc: {
-    color: "#AFC0D6",
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 7,
-  },
-  heroMetricRow: {
-    marginTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.12)",
-    paddingTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  heroMetric: {
-    flex: 1,
-  },
-  heroMetricValue: {
-    color: colors.white,
-    fontSize: 25,
-    fontWeight: "900",
-  },
-  heroMetricLabel: {
-    color: "#8FA3BC",
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  heroDivider: {
-    width: 1,
-    height: 38,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    marginHorizontal: 16,
-  },
-
-  listPanel: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    marginBottom: 18,
-  },
-  deviceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  deviceIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: "#EBF8F1",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-  deviceTextWrap: {
-    flex: 1,
-  },
-  deviceName: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "900",
-    marginBottom: 5,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 3,
-  },
-  deviceMeta: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "700",
-    marginLeft: 5,
-  },
-  lastSeen: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: "700",
-    marginLeft: 5,
-  },
-  statusWrap: {
-    marginLeft: 8,
-  },
-
-  notePanel: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: "row",
-  },
-  noteIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: "#E9F7FB",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  noteTextWrap: {
-    flex: 1,
-  },
-  noteTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  noteText: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 5,
-  },
+  page: { flex: 1, backgroundColor: colors.background },
+  container: { paddingHorizontal: 18, paddingBottom: 116 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 },
+  headerTextWrap: { flex: 1, paddingRight: 14 },
+  eyebrow: { color: colors.blue, fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginBottom: 5 },
+  title: { color: colors.text, fontSize: 27, fontWeight: "900", letterSpacing: -0.9 },
+  subtitle: { color: colors.textSoft, fontSize: 12, fontWeight: "700", lineHeight: 17, marginTop: 5 },
+  refreshButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
+  heroCard: { backgroundColor: colors.white, borderWidth: 1, borderRadius: 24, padding: 16, flexDirection: "row", alignItems: "center", marginBottom: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
+  heroIcon: { width: 54, height: 54, borderRadius: 20, alignItems: "center", justifyContent: "center", marginRight: 14 },
+  heroCopy: { flex: 1 },
+  heroLabel: { color: colors.textSoft, fontSize: 11, fontWeight: "800" },
+  heroValue: { color: colors.text, fontSize: 34, fontWeight: "900", letterSpacing: -1, marginTop: 2 },
+  heroText: { color: colors.muted, fontSize: 10.5, fontWeight: "700", marginTop: 2 },
+  errorCard: { marginBottom: 12, padding: 13, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
+  errorText: { flex: 1, color: colors.textSoft, fontSize: 11, fontWeight: "700" },
+  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  miniStat: { flex: 1, backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 12 },
+  miniValue: { fontSize: 22, fontWeight: "900", letterSpacing: -0.7 },
+  miniLabel: { color: colors.textSoft, fontSize: 10.5, fontWeight: "800", marginTop: 2 },
+  listPanel: { backgroundColor: colors.white, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, shadowColor: colors.navy, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
+  loadingBlock: { paddingVertical: 26, alignItems: "center", gap: 9 },
+  loadingText: { color: colors.textSoft, fontSize: 12, fontWeight: "800" },
+  emptyBlock: { paddingVertical: 28, alignItems: "center" },
+  emptyTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 8 },
+  emptyText: { color: colors.textSoft, fontSize: 11, fontWeight: "700", marginTop: 4 },
+  deviceRow: { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#EDF2F8" },
+  rowLast: { borderBottomWidth: 0 },
+  deviceIcon: { width: 42, height: 42, borderRadius: 16, alignItems: "center", justifyContent: "center", marginRight: 12 },
+  deviceTextWrap: { flex: 1 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  deviceName: { flex: 1, color: colors.text, fontSize: 13, fontWeight: "900" },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 5 },
+  deviceMeta: { flex: 1, color: colors.textSoft, fontSize: 10.5, fontWeight: "700" },
+  lastSeen: { color: colors.muted, fontSize: 10.5, fontWeight: "700" },
+  deviceTechnical: { color: colors.muted, fontSize: 10, fontWeight: "700", marginTop: 5 },
 });
