@@ -1,29 +1,47 @@
 import React, { useMemo } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertTriangle, ArrowRight, CheckCircle2, FileText, MapPin, RefreshCcw, Server, Ticket, WifiOff } from "lucide-react-native";
+import { AlertTriangle, ArrowRight, FileText, MapPin, RefreshCcw, Ticket } from "lucide-react-native";
 
 import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
 
 const c = {
-  bg: "#EAF0F8",
+  bg: "#EDE9FF",
+  bg2: "#EAF8F7",
   card: "#FFFFFF",
-  ink: "#0B1220",
-  soft: "#53657C",
-  muted: "#8795A7",
-  line: "#DDE7F3",
-  navy: "#06101F",
-  navy2: "#0B1C36",
-  blue: "#2F62D8",
-  green: "#1F9D65",
-  amber: "#D48A1C",
-  red: "#D84D4D",
-  purple: "#7857D9",
-  cyan: "#0E8FA6",
+  ink: "#111827",
+  soft: "#5B6475",
+  muted: "#8993A4",
+  line: "#E5E8F2",
+  navy: "#080A1F",
+  purple: "#6E49E8",
+  violet: "#9A6CFF",
+  blue: "#315BFF",
+  cyan: "#18A6B6",
+  green: "#19A86B",
+  amber: "#E49A22",
+  red: "#E84A5F",
 };
+
+type EndpointTone = "blue" | "green" | "red" | "amber";
+
+const tone = {
+  blue: { main: c.blue, soft: "#E9EEFF", gradient: ["#DDE7FF", "#F8FAFF"] },
+  green: { main: c.green, soft: "#E4F8EF", gradient: ["#D9F7E9", "#F8FFFB"] },
+  red: { main: c.red, soft: "#FFE8EC", gradient: ["#FFE0E6", "#FFF8FA"] },
+  amber: { main: c.amber, soft: "#FFF2DD", gradient: ["#FFE7BF", "#FFFBF4"] },
+} as const;
 
 export default function OverviewHomeScreen() {
   const navigation = useNavigation<any>();
@@ -36,43 +54,58 @@ export default function OverviewHomeScreen() {
   }, [snapshot.endpoints.online, snapshot.endpoints.total]);
 
   const attention = snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded;
+  const staleRate = snapshot.endpoints.total ? Math.round((snapshot.endpoints.stale / snapshot.endpoints.total) * 100) : 0;
+  const offlineRate = snapshot.endpoints.total ? Math.round((snapshot.endpoints.offline / snapshot.endpoints.total) * 100) : 0;
   const openEndpointList = (status: "all" | "online" | "offline" | "stale") => navigation.navigate("ActiveDeviceList", { status });
-  const openTab = (name: string) => navigation.getParent()?.navigate(name);
+  const openReports = () => navigation.getParent()?.navigate("Reports");
   const refresh = () => reloadSnapshot({ silent: true });
 
   return (
     <View style={styles.page}>
-      <View style={{ height: insets.top, backgroundColor: c.navy }} />
+      <View style={{ height: insets.top, backgroundColor: c.bg }} />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 104 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
-        <LinearGradient colors={[c.navy, c.navy2, "#15325F"]} style={styles.hero}>
-          <View style={styles.orb} />
-          <View style={styles.heroTop}>
-            <View style={styles.heroCopy}>
-              <Text style={styles.eyebrow}>IT OPERATOR</Text>
-              <Text style={styles.title}>Command Center</Text>
-              <Text style={styles.meta}>Live data · {snapshot.generatedAt}</Text>
+        <LinearGradient colors={[c.bg, "#F5F3FF", c.bg2]} style={styles.backgroundStage}>
+          <View style={styles.headerBar}>
+            <View>
+              <Text style={styles.hello}>EMA Operations</Text>
+              <Text style={styles.screenTitle}>Today Snapshot</Text>
             </View>
-            <TouchableOpacity style={styles.refreshBtn} onPress={refresh} activeOpacity={0.85}>
-              {loading || refreshing ? <ActivityIndicator size="small" color="#FFFFFF" /> : <RefreshCcw size={18} color="#FFFFFF" strokeWidth={2.8} />}
+            <TouchableOpacity style={styles.circleButton} onPress={refresh} activeOpacity={0.85}>
+              {loading || refreshing ? (
+                <ActivityIndicator size="small" color={c.purple} />
+              ) : (
+                <RefreshCcw size={18} color={c.ink} strokeWidth={2.6} />
+              )}
+              <View style={styles.notificationDot} />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.glassCard}>
-            <View>
-              <Text style={styles.glassLabel}>Needs Attention</Text>
-              <Text style={styles.glassValue}>{formatNumber(attention)}</Text>
-              <Text style={styles.glassHint}>Offline + stale endpoints + SLA exceed</Text>
+          <LinearGradient
+            colors={["#7C5CFF", "#5E38E6", "#1B1E58"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroCard}
+          >
+            <View style={styles.heroBubbleOne} />
+            <View style={styles.heroBubbleTwo} />
+            <View style={styles.heroTopLine}>
+              <Text style={styles.heroKicker}>LIVE DATA</Text>
+              <Text style={styles.heroDate}>{snapshot.generatedAt}</Text>
             </View>
-            <View style={styles.onlinePill}>
-              <CheckCircle2 size={15} color="#B7F7DD" strokeWidth={2.8} />
-              <Text style={styles.onlinePillText}>{onlineRate}% online</Text>
+            <Text style={styles.heroTitle}>Command overview</Text>
+            <Text style={styles.heroSubtitle}>Focus on endpoint health, tickets and location coverage.</Text>
+
+            <View style={styles.heroMetricRow}>
+              <HeroMetric label="Attention" value={attention} />
+              <HeroMetric label="Endpoints" value={snapshot.endpoints.total} />
+              <HeroMetric label="Open Tickets" value={snapshot.tickets.open} />
             </View>
-          </View>
+          </LinearGradient>
         </LinearGradient>
 
         {error ? (
@@ -82,95 +115,331 @@ export default function OverviewHomeScreen() {
           </View>
         ) : null}
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Endpoint Fleet</Text>
-          <Text style={styles.panelSub}>Tap to open live device records</Text>
-          <View style={styles.grid}>
-            <MetricCard title="Managed Endpoints" caption="Open all devices" value={snapshot.endpoints.total} color={c.blue} icon={Server} onPress={() => openEndpointList("all")} />
-            <MetricCard title="Online Devices" caption="Open online devices" value={snapshot.endpoints.online} color={c.green} icon={CheckCircle2} onPress={() => openEndpointList("online")} />
-            <MetricCard title="Offline Devices" caption="Open not reporting" value={snapshot.endpoints.offline} color={c.red} icon={WifiOff} onPress={() => openEndpointList("offline")} />
-            <MetricCard title="Stale Devices" caption="Open stale telemetry" value={snapshot.endpoints.stale} color={c.amber} icon={AlertTriangle} onPress={() => openEndpointList("stale")} />
+        <View style={styles.sectionBlock}>
+          <View style={styles.sectionTitleRow}>
+            <View>
+              <Text style={styles.sectionLabel}>Endpoint Fleet</Text>
+              <Text style={styles.sectionCaption}>Management endpoint cards</Text>
+            </View>
+            <Text style={styles.sectionCount}>{formatNumber(snapshot.endpoints.total)}</Text>
           </View>
+
+          <EndpointActionCard
+            title="Managed Endpoint"
+            subtitle="All inventory devices"
+            value={snapshot.endpoints.total}
+            progress={100}
+            progressLabel="Inventory scope"
+            toneName="blue"
+            onPress={() => openEndpointList("all")}
+          />
+          <EndpointActionCard
+            title="Online Devices"
+            subtitle="Currently reporting"
+            value={snapshot.endpoints.online}
+            progress={onlineRate}
+            progressLabel={`${onlineRate}% online coverage`}
+            toneName="green"
+            onPress={() => openEndpointList("online")}
+          />
+          <EndpointActionCard
+            title="Offline Devices"
+            subtitle="Not reporting / disconnected"
+            value={snapshot.endpoints.offline}
+            progress={offlineRate}
+            progressLabel={`${offlineRate}% require follow-up`}
+            toneName="red"
+            onPress={() => openEndpointList("offline")}
+          />
+          <EndpointActionCard
+            title="Stale Devices"
+            subtitle="Telemetry is outdated"
+            value={snapshot.endpoints.stale}
+            progress={staleRate}
+            progressLabel={`${staleRate}% stale telemetry`}
+            toneName="amber"
+            onPress={() => openEndpointList("stale")}
+          />
         </View>
 
         <TouchableOpacity style={styles.serviceCard} activeOpacity={0.88} onPress={() => navigation.navigate("TicketSummary")}>
-          <View style={styles.serviceHead}>
-            <View style={styles.serviceIcon}><Ticket size={20} color="#FFFFFF" strokeWidth={2.8} /></View>
-            <View style={styles.flex}><Text style={styles.serviceTitle}>Service Desk</Text><Text style={styles.serviceSub}>Ticket workload and SLA exposure</Text></View>
-            <ArrowRight size={18} color={c.muted} strokeWidth={2.8} />
+          <View style={styles.serviceVisual}>
+            <View style={styles.serviceVisualCircle} />
+            <Ticket size={24} color="#FFFFFF" strokeWidth={2.7} />
           </View>
-          <View style={styles.ticketRow}>
-            <TicketMini label="Total" value={snapshot.tickets.total} />
-            <TicketMini label="Open" value={snapshot.tickets.open} />
-            <TicketMini label="Closed" value={snapshot.tickets.closed} />
-            <TicketMini label="SLA Exceed" value={snapshot.tickets.slaExceeded} danger />
+          <View style={styles.serviceContent}>
+            <Text style={styles.cardMiniLabel}>Service Desk</Text>
+            <Text style={styles.serviceTitle}>Ticket workload</Text>
+            <View style={styles.ticketInlineRow}>
+              <TicketPill label="Total" value={snapshot.tickets.total} />
+              <TicketPill label="Open" value={snapshot.tickets.open} />
+              <TicketPill label="SLA" value={snapshot.tickets.slaExceeded} danger />
+            </View>
           </View>
+          <View style={styles.actionBubble}><ArrowRight size={16} color={c.ink} strokeWidth={2.8} /></View>
         </TouchableOpacity>
 
-        <View style={styles.bottomRow}>
-          <InfoCard title="Device Geolocation" text="Detected vs not detected device location coverage." value="Open coverage" icon={MapPin} color={c.cyan} onPress={() => navigation.navigate("GeolocationSummary")} />
-          <InfoCard title="Latest Report" text={snapshot.latestReport?.title || "No report item found."} value="Open Reports" icon={FileText} color={c.purple} onPress={() => openTab("Reports")} />
+        <View style={styles.bottomCards}>
+          <SmallFeatureCard
+            title="Geolocation"
+            subtitle="Detected vs not detected"
+            value={`${formatNumber(snapshot.locationTotal)} devices`}
+            icon="geo"
+            colors={["#B7F4F2", "#FFFFFF"]}
+            accent={c.cyan}
+            onPress={() => navigation.navigate("GeolocationSummary")}
+          />
+          <SmallFeatureCard
+            title="Reports"
+            subtitle={snapshot.latestReport?.title || "Report center"}
+            value="Open report"
+            icon="report"
+            colors={["#E7DEFF", "#FFFFFF"]}
+            accent={c.purple}
+            onPress={openReports}
+          />
         </View>
       </ScrollView>
     </View>
   );
 }
 
-function MetricCard({ title, caption, value, color, icon: Icon, onPress }: any) {
-  return <TouchableOpacity style={styles.metricCard} onPress={onPress} activeOpacity={0.86}><View style={styles.metricTop}><View style={[styles.metricIcon, { backgroundColor: `${color}16` }]}><Icon size={18} color={color} strokeWidth={2.8} /></View><ArrowRight size={15} color={c.muted} strokeWidth={2.8} /></View><Text style={styles.metricValue}>{formatNumber(value)}</Text><Text style={styles.metricTitle}>{title}</Text><Text style={styles.metricCaption}>{caption}</Text></TouchableOpacity>;
+function HeroMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <View style={styles.heroMetric}>
+      <Text style={styles.heroMetricValue}>{formatNumber(value)}</Text>
+      <Text style={styles.heroMetricLabel}>{label}</Text>
+    </View>
+  );
 }
 
-function TicketMini({ label, value, danger }: any) {
-  return <View style={styles.ticketMini}><Text style={[styles.ticketValue, danger && { color: c.red }]}>{formatNumber(value)}</Text><Text style={styles.ticketLabel}>{label}</Text></View>;
+function EndpointActionCard({
+  title,
+  subtitle,
+  value,
+  progress,
+  progressLabel,
+  toneName,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  value: number;
+  progress: number;
+  progressLabel: string;
+  toneName: EndpointTone;
+  onPress: () => void;
+}) {
+  const t = tone[toneName];
+  const safeProgress = Math.max(0, Math.min(progress, 100));
+
+  return (
+    <TouchableOpacity style={styles.endpointCard} activeOpacity={0.88} onPress={onPress}>
+      <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
+        <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}25` }]} />
+        <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}45` }]} />
+        <View style={[styles.deviceBase, { borderColor: `${t.main}55` }]}>
+          <View style={[styles.deviceLine, { backgroundColor: t.main }]} />
+          <View style={[styles.deviceLineShort, { backgroundColor: `${t.main}AA` }]} />
+        </View>
+      </LinearGradient>
+
+      <View style={styles.endpointContent}>
+        <View style={styles.endpointTopRow}>
+          <View style={styles.endpointTitleWrap}>
+            <Text style={styles.endpointTitle}>{title}</Text>
+            <Text style={styles.endpointSub}>{subtitle}</Text>
+          </View>
+          <Text style={[styles.endpointValue, { color: t.main }]}>{formatNumber(value)}</Text>
+        </View>
+
+        <View style={styles.progressMetaRow}>
+          <Text style={styles.progressLabel}>{progressLabel}</Text>
+          <Text style={styles.progressPercent}>{safeProgress}%</Text>
+        </View>
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${safeProgress}%`, backgroundColor: t.main }]} />
+        </View>
+
+        <View style={styles.cardFooterRow}>
+          <Text style={[styles.cardActionText, { color: t.main }]}>Open device list</Text>
+          <ArrowRight size={15} color={t.main} strokeWidth={2.8} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
 }
 
-function InfoCard({ title, text, value, icon: Icon, color, onPress }: any) {
-  return <TouchableOpacity style={styles.infoCard} onPress={onPress} activeOpacity={0.88}><View style={[styles.infoIcon, { backgroundColor: `${color}18` }]}><Icon size={19} color={color} strokeWidth={2.8} /></View><Text style={styles.infoTitle}>{title}</Text><Text style={styles.infoText} numberOfLines={2}>{text}</Text><Text style={[styles.infoValue, { color }]}>{value}</Text></TouchableOpacity>;
+function TicketPill({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <View style={styles.ticketPill}>
+      <Text style={[styles.ticketPillValue, danger && { color: c.red }]}>{formatNumber(value)}</Text>
+      <Text style={styles.ticketPillLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function SmallFeatureCard({
+  title,
+  subtitle,
+  value,
+  icon,
+  colors,
+  accent,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  value: string;
+  icon: "geo" | "report";
+  colors: string[];
+  accent: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.featureCardWrap} activeOpacity={0.88} onPress={onPress}>
+      <LinearGradient colors={colors as any} style={styles.featureCard}>
+        <View style={styles.featureTopRow}>
+          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}>
+            {icon === "geo" ? <MapPin size={18} color={accent} strokeWidth={2.7} /> : <FileText size={18} color={accent} strokeWidth={2.7} />}
+          </View>
+          <ArrowRight size={15} color={accent} strokeWidth={2.8} />
+        </View>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureSubtitle} numberOfLines={2}>{subtitle}</Text>
+        <Text style={[styles.featureValue, { color: accent }]}>{value}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: c.bg },
   scroll: { flex: 1 },
-  hero: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 34, borderBottomLeftRadius: 34, borderBottomRightRadius: 34, overflow: "hidden" },
-  orb: { position: "absolute", width: 220, height: 220, borderRadius: 220, backgroundColor: "rgba(47,98,216,0.42)", top: -112, right: -82 },
-  heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  heroCopy: { flex: 1, paddingRight: 14 },
-  eyebrow: { color: "#9DC2FF", fontSize: 11, fontWeight: "900", letterSpacing: 1.3 },
-  title: { color: "#FFFFFF", fontSize: 30, fontWeight: "900", letterSpacing: -1.2, marginTop: 6 },
-  meta: { color: "#B5C7DE", fontSize: 11, fontWeight: "700", marginTop: 8 },
-  refreshBtn: { width: 42, height: 42, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.16)", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" },
-  glassCard: { marginTop: 24, padding: 16, borderRadius: 24, backgroundColor: "rgba(255,255,255,0.11)", borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", flexDirection: "row", justifyContent: "space-between" },
-  glassLabel: { color: "#D8E7FF", fontSize: 11, fontWeight: "800" },
-  glassValue: { color: "#FFFFFF", fontSize: 44, fontWeight: "900", letterSpacing: -1.6, marginTop: 3 },
-  glassHint: { color: "#9EB1CA", fontSize: 10.5, fontWeight: "700", marginTop: 2 },
-  onlinePill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 999, backgroundColor: "rgba(31,157,101,0.18)", alignSelf: "flex-start" },
-  onlinePillText: { color: "#B7F7DD", fontSize: 11, fontWeight: "900" },
+  backgroundStage: {
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
+    overflow: "hidden",
+  },
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 18,
+  },
+  hello: { color: c.soft, fontSize: 12, fontWeight: "800" },
+  screenTitle: { color: c.ink, fontSize: 26, fontWeight: "900", letterSpacing: -1, marginTop: 2 },
+  circleButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.72)",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#6B5AAE",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  notificationDot: { position: "absolute", top: 7, right: 7, width: 8, height: 8, borderRadius: 8, backgroundColor: c.purple },
+  heroCard: {
+    borderRadius: 30,
+    minHeight: 210,
+    padding: 20,
+    overflow: "hidden",
+    shadowColor: "#4D36A8",
+    shadowOffset: { width: 0, height: 18 },
+    shadowOpacity: 0.2,
+    shadowRadius: 26,
+    elevation: 5,
+  },
+  heroBubbleOne: { position: "absolute", width: 180, height: 180, borderRadius: 180, backgroundColor: "rgba(255,255,255,0.18)", right: -54, top: -62 },
+  heroBubbleTwo: { position: "absolute", width: 120, height: 120, borderRadius: 120, backgroundColor: "rgba(24,166,182,0.30)", left: -40, bottom: -46 },
+  heroTopLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  heroKicker: { color: "#DCD5FF", fontSize: 11, fontWeight: "900", letterSpacing: 1.2 },
+  heroDate: { color: "#C7C4F8", fontSize: 10.5, fontWeight: "800" },
+  heroTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "900", marginTop: 26, letterSpacing: -1.1 },
+  heroSubtitle: { color: "#DEDDFB", fontSize: 12, fontWeight: "700", lineHeight: 18, marginTop: 6, maxWidth: 250 },
+  heroMetricRow: { flexDirection: "row", gap: 10, marginTop: 18 },
+  heroMetric: { flex: 1, backgroundColor: "rgba(255,255,255,0.13)", borderRadius: 18, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" },
+  heroMetricValue: { color: "#FFFFFF", fontSize: 22, fontWeight: "900", letterSpacing: -0.7 },
+  heroMetricLabel: { color: "#C9C8F8", fontSize: 9.5, fontWeight: "800", marginTop: 3 },
   errorCard: { marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
   errorText: { flex: 1, color: c.soft, fontSize: 11, fontWeight: "700" },
-  panel: { marginHorizontal: 16, marginTop: -18, backgroundColor: c.card, borderRadius: 26, padding: 15, borderWidth: 1, borderColor: c.line, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 2 },
-  panelTitle: { color: c.ink, fontSize: 17, fontWeight: "900" },
-  panelSub: { color: c.soft, fontSize: 11, fontWeight: "700", marginTop: 4, marginBottom: 13 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  metricCard: { width: "47.9%", minHeight: 138, backgroundColor: "#F8FBFF", borderRadius: 20, borderWidth: 1, borderColor: "#E5EEF8", padding: 13 },
-  metricTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  metricIcon: { width: 37, height: 37, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  metricValue: { color: c.ink, fontSize: 29, fontWeight: "900", letterSpacing: -1, marginTop: 12 },
-  metricTitle: { color: c.ink, fontSize: 12, fontWeight: "900", marginTop: 2 },
-  metricCaption: { color: c.soft, fontSize: 10.3, fontWeight: "700", lineHeight: 14, marginTop: 4 },
-  serviceCard: { marginHorizontal: 16, marginTop: 14, backgroundColor: c.card, borderRadius: 26, padding: 15, borderWidth: 1, borderColor: c.line, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 2 },
-  serviceHead: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  serviceIcon: { width: 44, height: 44, borderRadius: 17, backgroundColor: c.navy2, alignItems: "center", justifyContent: "center", marginRight: 12 },
-  flex: { flex: 1 },
-  serviceTitle: { color: c.ink, fontSize: 16, fontWeight: "900" },
-  serviceSub: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
-  ticketRow: { flexDirection: "row", borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: "#E5EEF8", backgroundColor: "#F8FBFF" },
-  ticketMini: { flex: 1, paddingVertical: 13, alignItems: "center", borderRightWidth: 1, borderRightColor: "#E5EEF8" },
-  ticketValue: { color: c.ink, fontSize: 21, fontWeight: "900", letterSpacing: -0.6 },
-  ticketLabel: { color: c.soft, fontSize: 9.5, fontWeight: "800", marginTop: 3 },
-  bottomRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginTop: 14 },
-  infoCard: { flex: 1, backgroundColor: c.card, borderRadius: 24, padding: 14, borderWidth: 1, borderColor: c.line, minHeight: 160, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.07, shadowRadius: 18, elevation: 2 },
-  infoIcon: { width: 39, height: 39, borderRadius: 15, alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  infoTitle: { color: c.ink, fontSize: 13, fontWeight: "900" },
-  infoText: { color: c.soft, fontSize: 10.5, fontWeight: "700", lineHeight: 15, marginTop: 5, minHeight: 32 },
-  infoValue: { marginTop: "auto", fontSize: 11, fontWeight: "900" },
+  sectionBlock: { paddingHorizontal: 16, marginTop: 16 },
+  sectionTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 },
+  sectionLabel: { color: c.ink, fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
+  sectionCaption: { color: c.soft, fontSize: 11, fontWeight: "700", marginTop: 3 },
+  sectionCount: { color: c.purple, fontSize: 16, fontWeight: "900" },
+  endpointCard: {
+    backgroundColor: c.card,
+    borderRadius: 26,
+    padding: 10,
+    marginBottom: 12,
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    shadowColor: "#7460AE",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  deviceArtwork: { width: 100, minHeight: 118, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  artOrbLarge: { position: "absolute", width: 82, height: 82, borderRadius: 82, top: 14, right: -20 },
+  artOrbSmall: { position: "absolute", width: 46, height: 46, borderRadius: 46, bottom: 14, left: -8 },
+  deviceBase: { width: 58, height: 70, borderRadius: 18, borderWidth: 2, backgroundColor: "rgba(255,255,255,0.78)", padding: 10, justifyContent: "center" },
+  deviceLine: { height: 6, borderRadius: 6, marginBottom: 8 },
+  deviceLineShort: { width: 28, height: 6, borderRadius: 6 },
+  endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
+  endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  endpointTitleWrap: { flex: 1, paddingRight: 10 },
+  endpointTitle: { color: c.ink, fontSize: 16, fontWeight: "900", letterSpacing: -0.4 },
+  endpointSub: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
+  endpointValue: { fontSize: 28, fontWeight: "900", letterSpacing: -1 },
+  progressMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16, marginBottom: 6 },
+  progressLabel: { color: c.soft, fontSize: 9.5, fontWeight: "800" },
+  progressPercent: { color: c.muted, fontSize: 9.5, fontWeight: "900" },
+  progressTrack: { height: 7, borderRadius: 99, backgroundColor: "#EEF1F8", overflow: "hidden" },
+  progressFill: { height: 7, borderRadius: 99 },
+  cardFooterRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 },
+  cardActionText: { fontSize: 10.5, fontWeight: "900" },
+  serviceCard: {
+    marginHorizontal: 16,
+    marginTop: 4,
+    backgroundColor: c.card,
+    borderRadius: 28,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.85)",
+    shadowColor: "#7460AE",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
+    elevation: 2,
+  },
+  serviceVisual: { width: 82, height: 104, borderRadius: 24, backgroundColor: c.navy, alignItems: "center", justifyContent: "center", marginRight: 13, overflow: "hidden" },
+  serviceVisualCircle: { position: "absolute", width: 76, height: 76, borderRadius: 76, backgroundColor: "rgba(110,73,232,0.48)", top: -18, right: -16 },
+  serviceContent: { flex: 1 },
+  cardMiniLabel: { color: c.purple, fontSize: 10, fontWeight: "900", letterSpacing: 0.7 },
+  serviceTitle: { color: c.ink, fontSize: 17, fontWeight: "900", letterSpacing: -0.4, marginTop: 4 },
+  ticketInlineRow: { flexDirection: "row", gap: 7, marginTop: 12 },
+  ticketPill: { backgroundColor: "#F6F7FB", borderRadius: 14, paddingHorizontal: 9, paddingVertical: 8, minWidth: 54, alignItems: "center" },
+  ticketPillValue: { color: c.ink, fontSize: 16, fontWeight: "900" },
+  ticketPillLabel: { color: c.soft, fontSize: 8.5, fontWeight: "800", marginTop: 2 },
+  actionBubble: { width: 34, height: 34, borderRadius: 14, backgroundColor: "#F3F4FA", alignItems: "center", justifyContent: "center" },
+  bottomCards: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 14 },
+  featureCardWrap: { flex: 1, borderRadius: 26, overflow: "hidden", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
+  featureCard: { minHeight: 158, padding: 14, borderRadius: 26, borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
+  featureTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  featureIcon: { width: 42, height: 42, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  featureTitle: { color: c.ink, fontSize: 15, fontWeight: "900", marginTop: 16, letterSpacing: -0.3 },
+  featureSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", lineHeight: 15, marginTop: 5, minHeight: 32 },
+  featureValue: { marginTop: "auto", fontSize: 11, fontWeight: "900" },
 });
