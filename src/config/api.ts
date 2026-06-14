@@ -14,4 +14,13 @@ function normalizeBaseUrl(value?: string) {
   return withProtocol.replace(/\/+$/, "");
 }
 
-const expo
+const expoExtra =
+  ((Constants.expoConfig?.extra || (Constants as any).manifest?.extra || {}) as Record<string, unknown>);
+
+const envBaseUrl = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_BASE_URL as
+  | string
+  | undefined;
+
+export const API_BASE_URL = normalizeBaseUrl(
+  (expoExtra.apiBaseUrl as string | undefined) || envBaseUrl || DEFAULT_API_BASE_URL
+);
