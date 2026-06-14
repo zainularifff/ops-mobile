@@ -46,7 +46,8 @@ export type MobileTicketSnapshot = {
   slaAchievement: number;
 };
 
-export type MobileLatestLocation = {
+export type MobileDeviceLocation = {
+  id: string;
   deviceId: string;
   deviceName: string;
   username: string;
@@ -55,6 +56,7 @@ export type MobileLatestLocation = {
   latitude: string;
   longitude: string;
   time: string;
+  rawTime: string;
 };
 
 export type MobileOpsSnapshot = {
@@ -63,7 +65,8 @@ export type MobileOpsSnapshot = {
   endpoints: MobileEndpointSnapshot;
   tickets: MobileTicketSnapshot;
   latestReport: MobileReportItem | null;
-  latestLocation: MobileLatestLocation | null;
+  locations: MobileDeviceLocation[];
+  locationTotal: number;
 };
 
 type FetchOptions = {
@@ -87,6 +90,8 @@ const SNAPSHOT_CACHE_TTL_MS = 45 * 1000;
 const WORKLIST_CACHE_TTL_MS = 30 * 1000;
 const REPORTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_WORKLIST_LIMIT = 25;
+const GEOLOCATION_REQUEST_LIMIT = 300;
+const GEOLOCATION_DISPLAY_LIMIT = 30;
 
 const liveDataCache = new Map<string, CacheEntry<unknown>>();
 const liveDataInFlight = new Map<string, Promise<unknown>>();
@@ -242,6 +247,16 @@ function getDateSortValue(value: unknown) {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function getRows(payload: any): any[] {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.records)) return payload.records;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.data?.rows)) return payload.data.rows;
+  if (Array.isArray(payload?.data?.records)) return payload.data.records;
+  return [];
+}
+
 function pickLatestReport(reports: MobileReportItem[]) {
   if (!reports.length) return null;
 
@@ -250,19 +265,70 @@ function pickLatestReport(reports: MobileReportItem[]) {
   })[0];
 }
 
-function mapLatestLocation(rows: any[]): MobileLatestLocation | null {
-  const first = rows[0];
-  if (!first) return null;
+function getLocationDeviceKey(row: any, index: number) {
+  return cleanText(
+    row?.DeviceID ||
+      row?.deviceID ||
+      row?.DeviceId ||
+      row?.Object_DeviceID ||
+      row?.ComputerName ||
+      row?.DeviceName ||
+      row?.Object_Client_Name ||
+      row?.SerialNumber,
+    `device-${index + 1}`
+  );
+}
+
+function getLocationRawTime(row: any) {
+  return cleanText(
+    row?.Time ||
+      row?.DateTime ||
+      row?.LastSeenAt ||
+      row?.UpdatedAt ||
+      row?.DeviceTimeStamp ||
+      row?.CreatedAt,
+    ""
+  );
+}
+
+function mapDeviceLocation(row: any, index: number): MobileDeviceLocation {
+  const deviceId = getLocationDeviceKey(row, index);
+  const rawTime = getLocationRawTime(row);
 
   return {
-    deviceId: cleanText(first?.DeviceID || first?.deviceID),
-    deviceName: cleanText(first?.DeviceName || first?.ComputerName || first?.Object_Client_Name),
-    username: cleanText(first?.LastLoggedInUser || first?.Username),
-    model: cleanText(first?.DeviceModelName || first?.Model),
-    address: cleanText(first?.LocationName || first?.Address),
-    latitude: cleanText(first?.Latitude || first?.latitude),
-    longitude: cleanText(first?.Longitude || first?.longitude),
-    time: formatDateTime(first?.Time || first?.DateTime),
+    id: uniqueKey(`${deviceId}-${rawTime}`, index, "location"),
+    deviceId,
+    deviceName: cleanText(row?.DeviceName || row?.ComputerName || row?.Object_Client_Name || row?.HostName, deviceId),
+    username: cleanText(row?.LastLoggedInUser || row?.Username || row?.UserName || row?.UserID),
+    model: cleanText(row?.DeviceModelName || row?.Model || row?.PlatformType),
+    address: cleanText(row?.LocationName || row?.Address || row?.FormattedAddress || row?.City || row?.Object_Full_Name),
+    latitude: cleanText(row?.Latitude || row?.latitude || row?.Lat),
+    longitude: cleanText(row?.Longitude || row?.longitude || row?.Lng || row?.Long),
+    time: formatDateTime(rawTime),
+    rawTime,
+  };
+}
+
+function mapLatestDeviceLocations(rows: any[]): { locations: MobileDeviceLocation[]; total: number } {
+  const latestByDevice = new Map<string, { row: any; index: number; time: number }>();
+
+  rows.forEach((row, index) => {
+    const key = normalizeKeyPart(getLocationDeviceKey(row, index), `device-${index + 1}`);
+    const time = getDateSortValue(getLocationRawTime(row));
+    const current = latestByDevice.get(key);
+
+    if (!current || time >= current.time) {
+      latestByDevice.set(key, { row, index, time });
+    }
+  });
+
+  const locations = Array.from(latestByDevice.values())
+    .sort((a, b) => b.time - a.time)
+    .map((item, index) => mapDeviceLocation(item.row, index));
+
+  return {
+    locations: locations.slice(0, GEOLOCATION_DISPLAY_LIMIT),
+    total: locations.length,
   };
 }
 
@@ -335,7 +401,7 @@ export async function fetchOperationsSummary(
 
 async function requestWorklistItems(limit: number): Promise<MobileWorkItem[]> {
   const response: any = await apiRequest(`/api/task-list?limit=${limit}`);
-  const rows = Array.isArray(response?.data) ? response.data : [];
+  const rows = getRows(response);
 
   return rows.map((task: any, index: number) => {
     const type = mapTaskType(task);
@@ -386,7 +452,7 @@ async function requestReportCatalog(): Promise<MobileReportItem[]> {
     ? response.reports
     : Array.isArray(response?.data?.reports)
       ? response.data.reports
-      : [];
+      : getRows(response);
 
   return rows.map((item: any, index: number) => {
     const title = cleanText(item?.title || item?.name);
@@ -420,17 +486,16 @@ export async function fetchReportCatalog(
   );
 }
 
-async function requestLatestLocation() {
-  const response: any = await apiRequest("/api/geolocation/all-live?limit=1");
-  const rows = Array.isArray(response?.data) ? response.data : [];
-  return mapLatestLocation(rows);
+async function requestDeviceLocations() {
+  const response: any = await apiRequest(`/api/geolocation/all-live?limit=${GEOLOCATION_REQUEST_LIMIT}`);
+  return mapLatestDeviceLocations(getRows(response));
 }
 
 async function requestMobileOpsSnapshot(): Promise<MobileOpsSnapshot> {
   const [dashboardResult, reportsResult, locationResult] = await Promise.allSettled([
     requestOperationsDashboard(),
     requestReportCatalog(),
-    requestLatestLocation(),
+    requestDeviceLocations(),
   ]);
 
   if (dashboardResult.status === "rejected") {
@@ -452,17 +517,20 @@ async function requestMobileOpsSnapshot(): Promise<MobileOpsSnapshot> {
     hardware?.offlineDevices,
     Math.max(totalEndpoints - online, 0)
   );
-  const stale = asNumber(hardware?.staleSync, 0);
+  const stale = asNumber(hardware?.staleSync || hardware?.staleDevices, 0);
 
   const open = asNumber(
     serviceDesk?.pendingTickets,
     pickKpiValue(kpiCards, "Open Incidents")
   );
-  const closed = asNumber(trendSummary?.resolved, 0);
-  const slaExceeded = asNumber(serviceDesk?.overdueTickets, 0);
+  const closed = asNumber(trendSummary?.resolved || serviceDesk?.closedTickets, 0);
+  const slaExceeded = asNumber(serviceDesk?.overdueTickets || serviceDesk?.slaExceeded, 0);
 
   const reports = reportsResult.status === "fulfilled" ? reportsResult.value : [];
-  const latestLocation = locationResult.status === "fulfilled" ? locationResult.value : null;
+  const locationPayload =
+    locationResult.status === "fulfilled"
+      ? locationResult.value
+      : { locations: [], total: 0 };
 
   return {
     generatedAt: formatDateTime(data?.generatedAt || new Date().toISOString()),
@@ -481,7 +549,8 @@ async function requestMobileOpsSnapshot(): Promise<MobileOpsSnapshot> {
       slaAchievement: asNumber(serviceDesk?.slaAchievement, 0),
     },
     latestReport: pickLatestReport(reports),
-    latestLocation,
+    locations: locationPayload.locations,
+    locationTotal: locationPayload.total,
   };
 }
 
