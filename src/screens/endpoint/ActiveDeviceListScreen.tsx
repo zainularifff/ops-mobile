@@ -39,7 +39,7 @@ const DEVICE_FETCH_LIMIT = 500;
 const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string }> = {
   all: {
     title: "Managed Endpoints",
-    subtitle: "Search, filter and open live endpoint records.",
+    subtitle: "Live endpoint list from hardware inventory.",
     tone: colors.blue,
   },
   online: {
@@ -116,6 +116,19 @@ export default function ActiveDeviceListScreen() {
 
   const config = titleMap[activeFilter];
 
+  const endpointStats = useMemo(() => {
+    const online = records.filter((record) => record.isOnline).length;
+    const stale = records.filter((record) => record.isStale).length;
+    const offline = records.filter((record) => !record.isOnline).length;
+
+    return {
+      total: records.length,
+      online,
+      offline,
+      stale,
+    };
+  }, [records]);
+
   const filteredRecords = useMemo(() => {
     return records.filter((record) => matchesStatus(record, activeFilter) && matchesSearch(record, searchText));
   }, [activeFilter, records, searchText]);
@@ -191,7 +204,7 @@ export default function ActiveDeviceListScreen() {
     >
       <View style={styles.headerRow}>
         <View style={styles.headerTextWrap}>
-          <Text style={[styles.eyebrow, { color: config.tone }]}>ENDPOINT RECORDS</Text>
+          <Text style={[styles.eyebrow, { color: config.tone }]}>ENDPOINT MANAGEMENT</Text>
           <Text style={styles.title}>{config.title}</Text>
           <Text style={styles.subtitle}>{config.subtitle}</Text>
         </View>
@@ -211,17 +224,24 @@ export default function ActiveDeviceListScreen() {
         </View>
       ) : null}
 
-      <View style={styles.filterPanel}>
-        <View style={styles.contextRow}>
-          <View>
-            <Text style={styles.contextLabel}>Current view</Text>
-            <Text style={styles.contextTitle}>{config.title}</Text>
-          </View>
-          <View style={[styles.contextBadge, { backgroundColor: `${config.tone}16` }]}> 
-            <Text style={[styles.contextBadgeText, { color: config.tone }]}>{formatNumber(filteredRecords.length)} records</Text>
-          </View>
+      <View style={styles.summaryCard}>
+        <View style={[styles.summaryIcon, { backgroundColor: `${config.tone}16` }]}> 
+          <MonitorCog size={24} color={config.tone} strokeWidth={2.8} />
         </View>
+        <View style={styles.summaryTextWrap}>
+          <Text style={styles.summaryLabel}>Live device records</Text>
+          <Text style={styles.summaryValue}>{formatNumber(endpointStats.total)}</Text>
+          <Text style={styles.summaryHint}>Filtered from {formatNumber(endpointStats.total)} hardware inventory assets</Text>
+        </View>
+      </View>
 
+      <View style={styles.kpiRow}>
+        <MiniStatusCard label="Online" value={endpointStats.online} color={colors.green} />
+        <MiniStatusCard label="Offline" value={endpointStats.offline} color={colors.red} />
+        <MiniStatusCard label="Stale" value={endpointStats.stale} color={colors.amber} />
+      </View>
+
+      <View style={styles.filterPanel}>
         <View style={styles.searchBox}>
           <Search size={16} color={colors.muted} strokeWidth={2.7} />
           <TextInput
@@ -350,6 +370,15 @@ export default function ActiveDeviceListScreen() {
   );
 }
 
+function MiniStatusCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <View style={styles.miniStatusCard}>
+      <Text style={[styles.miniStatusValue, { color }]}>{formatNumber(value)}</Text>
+      <Text style={styles.miniStatusLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   container: { paddingHorizontal: 18, paddingBottom: 116 },
@@ -361,12 +390,17 @@ const styles = StyleSheet.create({
   refreshButton: { width: 42, height: 42, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   errorCard: { marginBottom: 12, padding: 13, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
   errorText: { flex: 1, color: colors.textSoft, fontSize: 11, fontWeight: "700" },
+  summaryCard: { backgroundColor: colors.white, borderRadius: 24, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 12, flexDirection: "row", alignItems: "center", shadowColor: colors.navy, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
+  summaryIcon: { width: 58, height: 58, borderRadius: 20, alignItems: "center", justifyContent: "center", marginRight: 15 },
+  summaryTextWrap: { flex: 1 },
+  summaryLabel: { color: colors.textSoft, fontSize: 11, fontWeight: "900" },
+  summaryValue: { color: colors.text, fontSize: 30, fontWeight: "900", letterSpacing: -1, marginTop: 3 },
+  summaryHint: { color: colors.textSoft, fontSize: 10.5, fontWeight: "700", marginTop: 4 },
+  kpiRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
+  miniStatusCard: { flex: 1, backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 1 },
+  miniStatusValue: { fontSize: 21, fontWeight: "900", letterSpacing: -0.5 },
+  miniStatusLabel: { color: colors.textSoft, fontSize: 10.5, fontWeight: "800", marginTop: 3 },
   filterPanel: { backgroundColor: colors.white, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 1 },
-  contextRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
-  contextLabel: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },
-  contextTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
-  contextBadge: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999 },
-  contextBadgeText: { fontSize: 10.5, fontWeight: "900" },
   searchBox: { minHeight: 44, borderRadius: 16, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8 },
   searchInput: { flex: 1, color: colors.text, fontSize: 12.5, fontWeight: "700", paddingVertical: 8 },
   clearSearch: { color: colors.blue, fontSize: 11, fontWeight: "900" },
