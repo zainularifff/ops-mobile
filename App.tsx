@@ -23,6 +23,7 @@ import {
 } from "./src/services/secureStorage";
 
 import { colors } from "./src/theme/colors";
+import type { LoginResult, TwoFactorChallenge } from "./src/types/auth";
 
 type AppStep =
   | "loading"
@@ -34,6 +35,8 @@ type AppStep =
 
 export default function App() {
   const [step, setStep] = useState<AppStep>("loading");
+  const [twoFactorChallenge, setTwoFactorChallenge] =
+    useState<TwoFactorChallenge | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -82,14 +85,21 @@ export default function App() {
     };
   }, []);
 
+  function handleLoginSuccess(result: LoginResult) {
+    if (!result.success) return;
+
+    if (result.twoFactorRequired) {
+      setTwoFactorChallenge(result.challenge);
+      setStep("twoFactor");
+      return;
+    }
+
+    setTwoFactorChallenge(null);
+    setStep("enableBiometric");
+  }
+
   async function completeLogin(biometricEnabled: boolean) {
     try {
-      /**
-       * Token sebenar sudah disimpan dalam loginUser()
-       * selepas POST /api/login berjaya.
-       *
-       * Jadi dekat sini kita hanya simpan biometric setting.
-       */
       await setBiometricEnabled(biometricEnabled);
       setStep("dashboard");
     } catch (error) {
@@ -104,6 +114,7 @@ export default function App() {
       // Ignore storage error
     }
 
+    setTwoFactorChallenge(null);
     setStep("login");
   }
 
@@ -114,6 +125,7 @@ export default function App() {
       // Ignore storage error
     }
 
+    setTwoFactorChallenge(null);
     setStep("login");
   }
 
@@ -128,27 +140,21 @@ export default function App() {
     }
 
     if (step === "login") {
-      return (
-        <LoginScreen
-          onLoginSuccess={() => {
-            /**
-             * Backend belum ada OTP endpoint.
-             * Jadi selepas login berjaya, terus pergi enable biometric.
-             *
-             * Kalau nanti backend dah ada OTP,
-             * tukar line ni kepada: setStep("twoFactor")
-             */
-            setStep("enableBiometric");
-          }}
-        />
-      );
+      return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
     }
 
     if (step === "twoFactor") {
       return (
         <TwoFactorScreen
-          onVerifySuccess={() => setStep("enableBiometric")}
-          onBack={() => setStep("login")}
+          challenge={twoFactorChallenge}
+          onVerifySuccess={() => {
+            setTwoFactorChallenge(null);
+            setStep("enableBiometric");
+          }}
+          onBack={() => {
+            setTwoFactorChallenge(null);
+            setStep("login");
+          }}
         />
       );
     }
