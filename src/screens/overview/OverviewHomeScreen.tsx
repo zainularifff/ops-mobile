@@ -68,6 +68,8 @@ export default function OverviewHomeScreen() {
   const staleRate = pct(snapshot.endpoints.stale, snapshot.endpoints.total);
   const offlineRate = pct(snapshot.endpoints.offline, snapshot.endpoints.total);
   const attention = snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded;
+  const detectedLocations = Math.min(snapshot.locationTotal, snapshot.endpoints.total || snapshot.locationTotal);
+  const notDetectedLocations = Math.max((snapshot.endpoints.total || 0) - detectedLocations, 0);
   const openEndpointList = (status: "all" | "online" | "offline" | "stale") => navigation.navigate("ActiveDeviceList", { status });
   const openReports = () => navigation.getParent()?.navigate("Reports");
   const refresh = () => reloadSnapshot({ silent: true });
@@ -123,6 +125,37 @@ export default function OverviewHomeScreen() {
           </View>
         ) : null}
 
+        <OperationsPulse
+          onlineRate={onlineRate}
+          online={snapshot.endpoints.online}
+          offline={snapshot.endpoints.offline}
+          stale={snapshot.endpoints.stale}
+          critical={attention > 0}
+        />
+
+        <View style={styles.featureCardsRow}>          
+          <SmallFeatureCard
+            title="Geolocation"
+            subtitle="Detected vs not detected"
+            value={`${formatNumber(detectedLocations)} detected`}
+            footer={`${formatNumber(notDetectedLocations)} not detected`}
+            icon="geo"
+            colors={["#B7F4F2", "#FFFFFF"]}
+            accent={c.cyan}
+            onPress={() => navigation.navigate("GeolocationSummary")}
+          />
+          <SmallFeatureCard
+            title="Reports"
+            subtitle={snapshot.latestReport?.title || "Report center"}
+            value="Open report"
+            footer="Latest report"
+            icon="report"
+            colors={["#E7DEFF", "#FFFFFF"]}
+            accent={c.purple}
+            onPress={openReports}
+          />
+        </View>
+
         <View style={styles.sectionBlock}>
           <View style={styles.sectionTitleRow}>
             <View>
@@ -154,27 +187,6 @@ export default function OverviewHomeScreen() {
           </View>
           <View style={styles.actionBubble}><ArrowRight size={16} color={c.ink} strokeWidth={2.8} /></View>
         </TouchableOpacity>
-
-        <View style={styles.bottomCards}>
-          <SmallFeatureCard
-            title="Geolocation"
-            subtitle="Detected vs not detected"
-            value={`${formatNumber(snapshot.locationTotal)} devices`}
-            icon="geo"
-            colors={["#B7F4F2", "#FFFFFF"]}
-            accent={c.cyan}
-            onPress={() => navigation.navigate("GeolocationSummary")}
-          />
-          <SmallFeatureCard
-            title="Reports"
-            subtitle={snapshot.latestReport?.title || "Report center"}
-            value="Open report"
-            icon="report"
-            colors={["#E7DEFF", "#FFFFFF"]}
-            accent={c.purple}
-            onPress={openReports}
-          />
-        </View>
       </ScrollView>
     </View>
   );
@@ -185,6 +197,65 @@ function HeroMetric({ label, value }: { label: string; value: number }) {
     <View style={styles.heroMetric}>
       <Text style={styles.heroMetricValue}>{formatNumber(value)}</Text>
       <Text style={styles.heroMetricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function OperationsPulse({
+  onlineRate,
+  online,
+  offline,
+  stale,
+  critical,
+}: {
+  onlineRate: number;
+  online: number;
+  offline: number;
+  stale: number;
+  critical: boolean;
+}) {
+  const distributionTotal = Math.max(online + offline + stale, 1);
+  const onlineWidth = Math.max(pct(online, distributionTotal), online > 0 ? 5 : 0);
+  const offlineWidth = Math.max(pct(offline, distributionTotal), offline > 0 ? 5 : 0);
+  const staleWidth = Math.max(0, 100 - onlineWidth - offlineWidth);
+
+  return (
+    <View style={styles.pulseCard}>
+      <View style={styles.pulseHeader}>
+        <View>
+          <Text style={styles.pulseTitle}>Operations Pulse</Text>
+          <Text style={styles.pulseSubtitle}>Live endpoint distribution</Text>
+        </View>
+        {critical ? <Text style={styles.criticalBadge}>Critical</Text> : <Text style={styles.healthyBadge}>Healthy</Text>}
+      </View>
+
+      <View style={styles.pulseBody}>
+        <View style={styles.coverageDial}>
+          <Text style={styles.coverageValue}>{onlineRate}%</Text>
+          <Text style={styles.coverageLabel}>Online coverage</Text>
+        </View>
+
+        <View style={styles.distributionPanel}>
+          <View style={styles.stackTrack}>
+            <View style={[styles.stackSegment, { width: `${onlineWidth}%`, backgroundColor: c.green }]} />
+            <View style={[styles.stackSegment, { width: `${offlineWidth}%`, backgroundColor: c.red }]} />
+            <View style={[styles.stackSegment, { width: `${staleWidth}%`, backgroundColor: c.amber }]} />
+          </View>
+          <LegendRow color={c.green} label="Online" value={online} />
+          <LegendRow color={c.red} label="Offline" value={offline} />
+          <LegendRow color={c.amber} label="Stale" value={stale} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function LegendRow({ color, label, value }: { color: string; label: string; value: number }) {
+  return (
+    <View style={styles.legendRow}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={styles.legendLabel}>{label}</Text>
+      <Text style={styles.legendValue}>{formatNumber(value)}</Text>
     </View>
   );
 }
@@ -270,6 +341,7 @@ function SmallFeatureCard({
   title,
   subtitle,
   value,
+  footer,
   icon,
   colors,
   accent,
@@ -278,6 +350,7 @@ function SmallFeatureCard({
   title: string;
   subtitle: string;
   value: string;
+  footer: string;
   icon: "geo" | "report";
   colors: string[];
   accent: string;
@@ -295,6 +368,7 @@ function SmallFeatureCard({
         <Text style={styles.featureTitle}>{title}</Text>
         <Text style={styles.featureSubtitle} numberOfLines={2}>{subtitle}</Text>
         <Text style={[styles.featureValue, { color: accent }]}>{value}</Text>
+        <Text style={styles.featureFooter}>{footer}</Text>
       </LinearGradient>
     </TouchableOpacity>
   );
@@ -323,6 +397,35 @@ const styles = StyleSheet.create({
   heroMetricLabel: { color: "#C9C8F8", fontSize: 9.5, fontWeight: "800", marginTop: 3 },
   errorCard: { marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
   errorText: { flex: 1, color: c.soft, fontSize: 11, fontWeight: "700" },
+
+  pulseCard: { marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 26, padding: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.88)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
+  pulseHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 13 },
+  pulseTitle: { color: c.ink, fontSize: 17, fontWeight: "900", letterSpacing: -0.4 },
+  pulseSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
+  criticalBadge: { color: c.red, backgroundColor: "#FFE6EC", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, fontSize: 10, fontWeight: "900" },
+  healthyBadge: { color: c.green, backgroundColor: "#E7F8EF", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, fontSize: 10, fontWeight: "900" },
+  pulseBody: { flexDirection: "row", gap: 12, alignItems: "center" },
+  coverageDial: { width: 96, minHeight: 104, borderRadius: 24, backgroundColor: "#F6F4FF", alignItems: "center", justifyContent: "center", padding: 12 },
+  coverageValue: { color: c.purple, fontSize: 30, fontWeight: "900", letterSpacing: -1 },
+  coverageLabel: { color: c.soft, fontSize: 9.5, fontWeight: "800", marginTop: 4, textAlign: "center" },
+  distributionPanel: { flex: 1 },
+  stackTrack: { height: 18, borderRadius: 99, overflow: "hidden", backgroundColor: "#EEF1F8", flexDirection: "row", marginBottom: 11 },
+  stackSegment: { height: 18 },
+  legendRow: { flexDirection: "row", alignItems: "center", marginTop: 7 },
+  legendDot: { width: 9, height: 9, borderRadius: 9, marginRight: 8 },
+  legendLabel: { flex: 1, color: c.soft, fontSize: 11, fontWeight: "800" },
+  legendValue: { color: c.ink, fontSize: 11, fontWeight: "900" },
+
+  featureCardsRow: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 14 },
+  featureCardWrap: { flex: 1, borderRadius: 26, overflow: "hidden", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
+  featureCard: { minHeight: 158, padding: 14, borderRadius: 26, borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
+  featureTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  featureIcon: { width: 44, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  featureTitle: { color: c.ink, fontSize: 15, fontWeight: "900", marginTop: 16, letterSpacing: -0.3 },
+  featureSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", lineHeight: 15, marginTop: 5, minHeight: 32 },
+  featureValue: { marginTop: "auto", fontSize: 11, fontWeight: "900" },
+  featureFooter: { color: c.soft, fontSize: 9.5, fontWeight: "800", marginTop: 4 },
+
   sectionBlock: { paddingHorizontal: 16, marginTop: 16 },
   sectionTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 },
   sectionLabel: { color: c.ink, fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
@@ -350,6 +453,7 @@ const styles = StyleSheet.create({
   cardFooterRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
   actionPill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
   actionPillText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
+
   serviceCard: { marginHorizontal: 16, marginTop: 4, backgroundColor: c.card, borderRadius: 28, padding: 12, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
   serviceVisual: { width: 82, height: 104, borderRadius: 24, backgroundColor: c.navy, alignItems: "center", justifyContent: "center", marginRight: 13, overflow: "hidden" },
   serviceVisualCircle: { position: "absolute", width: 76, height: 76, borderRadius: 76, backgroundColor: "rgba(110,73,232,0.48)", top: -18, right: -16 },
@@ -361,12 +465,4 @@ const styles = StyleSheet.create({
   ticketPillValue: { color: c.ink, fontSize: 16, fontWeight: "900" },
   ticketPillLabel: { color: c.soft, fontSize: 8.5, fontWeight: "800", marginTop: 2 },
   actionBubble: { width: 34, height: 34, borderRadius: 14, backgroundColor: "#F3F4FA", alignItems: "center", justifyContent: "center" },
-  bottomCards: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 14 },
-  featureCardWrap: { flex: 1, borderRadius: 26, overflow: "hidden", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
-  featureCard: { minHeight: 158, padding: 14, borderRadius: 26, borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
-  featureTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  featureIcon: { width: 44, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  featureTitle: { color: c.ink, fontSize: 15, fontWeight: "900", marginTop: 16, letterSpacing: -0.3 },
-  featureSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", lineHeight: 15, marginTop: 5, minHeight: 32 },
-  featureValue: { marginTop: "auto", fontSize: 11, fontWeight: "900" },
 });
