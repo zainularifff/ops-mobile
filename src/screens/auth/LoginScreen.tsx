@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -18,11 +19,13 @@ import {
   ShieldCheck,
 } from "lucide-react-native";
 
-import { getAppVersion, getAppBuildNumber } from "../../utils/appInfo";
+import { loginUser } from "../../services/authService";
+import type { LoginResult } from "../../types/auth";
+import { getAppBuildNumber, getAppVersion } from "../../utils/appInfo";
 import { styles } from "./LoginScreen.styles";
 
 type Props = {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (result: LoginResult) => void;
 };
 
 export default function LoginScreen({ onLoginSuccess }: Props) {
@@ -30,6 +33,7 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
 
   const appVersion = getAppVersion();
   const buildNumber = getAppBuildNumber();
@@ -37,18 +41,32 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
     ? `v${appVersion} (${buildNumber})`
     : `v${appVersion}`;
 
-  function handleLogin() {
+  async function handleLogin() {
     const cleanUsername = username.trim();
 
-    if (!username || !password) {
+    if (!cleanUsername || !password) {
       const message = "Please enter username and password.";
       setLoginError(message);
       Alert.alert("Login Required", message);
       return;
     }
 
-    setLoginError("");
-    onLoginSuccess();
+    try {
+      setLoggingIn(true);
+      setLoginError("");
+
+      const result = await loginUser(cleanUsername, password);
+
+      if (!result.success) {
+        setLoginError(result.message);
+        Alert.alert("Login Failed", result.message);
+        return;
+      }
+
+      onLoginSuccess(result);
+    } finally {
+      setLoggingIn(false);
+    }
   }
 
   return (
@@ -116,6 +134,7 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
               autoCorrect={false}
               style={styles.input}
               returnKeyType="next"
+              editable={!loggingIn}
             />
 
             <Text style={styles.label}>Password</Text>
@@ -132,12 +151,14 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
                 style={styles.passwordInput}
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}
+                editable={!loggingIn}
               />
 
               <TouchableOpacity
                 onPress={() => setShowPassword((current) => !current)}
                 style={styles.eyeButton}
                 activeOpacity={0.7}
+                disabled={loggingIn}
               >
                 {showPassword ? (
                   <EyeOff size={20} color="#64748B" strokeWidth={2.4} />
@@ -154,11 +175,16 @@ export default function LoginScreen({ onLoginSuccess }: Props) {
             ) : null}
 
             <TouchableOpacity
-              style={styles.button}
+              style={[styles.button, loggingIn && { opacity: 0.65 }]}
               onPress={handleLogin}
               activeOpacity={0.85}
+              disabled={loggingIn}
             >
-              <Text style={styles.buttonText}>Sign In</Text>
+              {loggingIn ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonText}>Sign In</Text>
+              )}
             </TouchableOpacity>
 
             <View style={styles.infoStrip}>
