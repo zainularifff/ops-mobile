@@ -1,5 +1,12 @@
-import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -12,9 +19,9 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import { useLiveWorklist } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
 import {
-  getOperationRecords,
   operationModules,
   OperationModuleKey,
 } from "../../data/operations";
@@ -25,9 +32,41 @@ import {
   styles,
 } from "./OperationListScreen.styles";
 
+function sourceLabel(type: string) {
+  if (type === "ticket") return "Ticket";
+  if (type === "remote") return "Target Device";
+  if (type === "software") return "Software";
+  if (type === "asset") return "Asset";
+  return "Device";
+}
+
+function categoryMatches(record: any, categoryKey: string) {
+  const text = `${record.title} ${record.status} ${record.reason} ${record.source}`.toLowerCase();
+
+  if (["active", "sessions", "compliant", "new", "tracked"].includes(categoryKey)) {
+    return record.priority === "Low" || text.includes("active") || text.includes("success") || text.includes("completed");
+  }
+
+  if (["offline", "failed", "vulnerable", "critical", "mismatch", "sla"].includes(categoryKey)) {
+    return record.priority === "High" || text.includes("fail") || text.includes("offline") || text.includes("risk");
+  }
+
+  if (["stale", "pending", "outdated", "aging", "unknown", "afterhours"].includes(categoryKey)) {
+    return record.priority !== "Low" || text.includes("pending") || text.includes("stale") || text.includes("aging");
+  }
+
+  if (["review", "unauthorized", "accuracy"].includes(categoryKey)) {
+    return record.status.toLowerCase().includes("review") || record.priority !== "Low";
+  }
+
+  return true;
+}
+
 export default function OperationListScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { items: workItems, loading, refreshing, error, reloadWorklist } =
+    useLiveWorklist();
 
   const moduleKey: OperationModuleKey = route.params?.moduleKey || "endpoint";
   const categoryKey = route.params?.categoryKey || "offline";
@@ -37,7 +76,29 @@ export default function OperationListScreen() {
     moduleConfig.categories.find((item) => item.key === categoryKey) ||
     moduleConfig.categories[0];
 
-  const records = getOperationRecords(moduleKey, category.key);
+  const records = useMemo(() => {
+    return workItems
+      .filter((item) => item.type === moduleKey)
+      .filter((item) => categoryMatches(item, category.key))
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        source: item.source,
+        sourceLabel: sourceLabel(item.type),
+        site: item.site,
+        owner: item.owner,
+        time: item.updated,
+        priority: item.priority,
+        status: item.status,
+        summary: item.reason,
+        action: item.action,
+        details: [
+          { label: "Status", value: item.status },
+          { label: "Due", value: item.due },
+          { label: "Source", value: item.source },
+        ],
+      }));
+  }, [category.key, moduleKey, workItems]);
 
   function openRecord(record: any) {
     navigation.navigate("OperationDetail", {
@@ -47,6 +108,10 @@ export default function OperationListScreen() {
     });
   }
 
+  function handleRefresh() {
+    reloadWorklist({ silent: true });
+  }
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <ScrollView
@@ -54,6 +119,9 @@ export default function OperationListScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         bounces={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -76,24 +144,37 @@ export default function OperationListScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Selected Records</Text>
           <Text style={styles.summaryDesc}>
-            Mobile preview shows selected operational records only. Full data
-            and filters remain in the main EMA web system.
+            Mobile preview now uses live worklist records related to this
+            operational module.
           </Text>
+
+          {loading ? <ActivityIndicator size="small" color={moduleConfig.color} /> : null}
+          {error ? <Text style={styles.summaryDesc}>{error}</Text> : null}
 
           <View style={styles.summaryMetricRow}>
             <View style={styles.summaryMetric}>
               <Text style={styles.summaryValue}>{records.length}</Text>
-              <Text style={styles.summaryLabel}>Preview Records</Text>
+              <Text style={styles.summaryLabel}>Live Records</Text>
             </View>
 
             <View style={styles.summaryDivider} />
 
             <View style={styles.summaryMetric}>
-              <Text style={styles.summaryValue}>{category.value}</Text>
+              <Text style={styles.summaryValue}>{records.length}</Text>
               <Text style={styles.summaryLabel}>{category.title}</Text>
             </View>
           </View>
         </View>
+
+        {!loading && records.length === 0 ? (
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>No live record found</Text>
+            <Text style={styles.summaryDesc}>
+              No worklist item matched this module and category from the current
+              backend response.
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.recordList}>
           {records.map((record) => (
