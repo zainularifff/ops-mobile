@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 export type EndpointVisualKind = "managed" | "online" | "offline" | "stale";
 
@@ -7,9 +7,10 @@ export default function EndpointVisual({ kind, color }: { kind: EndpointVisualKi
   if (kind === "online") {
     return (
       <View style={styles.wrap}>
+        <ActivityIndicator style={styles.motion} size="small" color={color} />
         <View style={[styles.ringLarge, { borderColor: color }]} />
         <View style={[styles.ringSmall, { borderColor: color }]} />
-        <View style={[styles.core, { backgroundColor: color }]}>
+        <View style={[styles.core, { backgroundColor: color }]}> 
           <View style={styles.coreInner} />
         </View>
         <View style={[styles.dotOne, { backgroundColor: color }]} />
@@ -21,6 +22,7 @@ export default function EndpointVisual({ kind, color }: { kind: EndpointVisualKi
   if (kind === "offline") {
     return (
       <View style={styles.wrap}>
+        <ActivityIndicator style={styles.motion} size="small" color={color} />
         <View style={styles.rowGraphic}>
           <View style={[styles.node, { backgroundColor: color }]} />
           <View style={[styles.line, { backgroundColor: color }]} />
@@ -36,7 +38,8 @@ export default function EndpointVisual({ kind, color }: { kind: EndpointVisualKi
   if (kind === "stale") {
     return (
       <View style={styles.wrap}>
-        <View style={[styles.dial, { borderColor: color }]}>
+        <ActivityIndicator style={styles.motion} size="small" color={color} />
+        <View style={[styles.dial, { borderColor: color }]}> 
           <View style={[styles.handMain, { backgroundColor: color }]} />
           <View style={[styles.handSide, { backgroundColor: color }]} />
           <View style={[styles.center, { backgroundColor: color }]} />
@@ -48,16 +51,17 @@ export default function EndpointVisual({ kind, color }: { kind: EndpointVisualKi
 
   return (
     <View style={styles.wrap}>
+      <ActivityIndicator style={styles.motion} size="small" color={color} />
       <View style={styles.stack}>
-        <View style={[styles.layer, { borderColor: color }]}>
+        <View style={[styles.layer, { borderColor: color }]}> 
           <View style={[styles.light, { backgroundColor: color }]} />
           <View style={[styles.bar, { backgroundColor: color }]} />
         </View>
-        <View style={[styles.layer, styles.layerOffset, { borderColor: color }]}>
+        <View style={[styles.layer, styles.layerOffset, { borderColor: color }]}> 
           <View style={[styles.light, { backgroundColor: color }]} />
           <View style={[styles.barShort, { backgroundColor: color }]} />
         </View>
-        <View style={[styles.layer, { borderColor: color }]}>
+        <View style={[styles.layer, { borderColor: color }]}> 
           <View style={[styles.light, { backgroundColor: color }]} />
           <View style={[styles.bar, { backgroundColor: color }]} />
         </View>
@@ -68,6 +72,7 @@ export default function EndpointVisual({ kind, color }: { kind: EndpointVisualKi
 
 const styles = StyleSheet.create({
   wrap: { width: 78, height: 78, alignItems: "center", justifyContent: "center" },
+  motion: { position: "absolute", opacity: 0.18, transform: [{ scale: 1.95 }] },
   ringLarge: { position: "absolute", width: 70, height: 70, borderRadius: 70, borderWidth: 1.5, opacity: 0.18 },
   ringSmall: { position: "absolute", width: 46, height: 46, borderRadius: 46, borderWidth: 1.5, opacity: 0.28 },
   core: { width: 30, height: 30, borderRadius: 30, alignItems: "center", justifyContent: "center" },
