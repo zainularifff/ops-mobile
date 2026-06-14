@@ -1,5 +1,5 @@
 import { API_BASE_URL } from "../config/api";
-import { clearSessionToken, getSessionToken } from "../utils/secureStorage";
+import { clearSessionToken, getSessionToken } from "./secureStorage";
 
 type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
