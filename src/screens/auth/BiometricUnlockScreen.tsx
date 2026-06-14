@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Alert, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Alert, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Fingerprint,
   LockKeyhole,
@@ -23,7 +24,6 @@ export default function BiometricUnlockScreen({
   onUsePassword,
 }: Props) {
   const [loading, setLoading] = useState(false);
-
 
   async function handleUnlock() {
     setLoading(true);
@@ -58,7 +58,7 @@ export default function BiometricUnlockScreen({
   }
 
   return (
-    <SafeAreaView style={styles.page}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.page}>
       <View style={styles.glowTop} />
       <View style={styles.glowBottom} />
 
