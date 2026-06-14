@@ -32,7 +32,7 @@ import {
 } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
 import { formatNumber } from "../../utils/formatters";
-import { operationModules } from "../../data/operations";
+import { operationModules } from "../../config/operationModules";
 
 import {
   categoryIconStyle,
