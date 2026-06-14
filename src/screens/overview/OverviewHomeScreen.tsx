@@ -120,7 +120,7 @@ export default function OverviewHomeScreen() {
           <View style={styles.sectionTitleRow}>
             <View>
               <Text style={styles.sectionLabel}>Endpoint Fleet</Text>
-              <Text style={styles.sectionCaption}>Management endpoint cards</Text>
+              <Text style={styles.sectionCaption}>Live device coverage across managed assets</Text>
             </View>
             <Text style={styles.sectionCount}>{formatNumber(snapshot.endpoints.total)}</Text>
           </View>
@@ -243,8 +243,6 @@ function EndpointActionCard({
   return (
     <TouchableOpacity style={styles.endpointCard} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
-        <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}14` }]} />
-        <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}24` }]} />
         <EndpointVisual kind={graphic} color={t.main} />
       </LinearGradient>
 
@@ -381,21 +379,19 @@ const styles = StyleSheet.create({
   sectionCount: { color: c.purple, fontSize: 16, fontWeight: "900" },
   endpointCard: {
     backgroundColor: c.card,
-    borderRadius: 24,
+    borderRadius: 26,
     padding: 10,
     marginBottom: 12,
     flexDirection: "row",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.8)",
     shadowColor: "#7460AE",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.1,
+    shadowRadius: 18,
     elevation: 2,
   },
-  deviceArtwork: { width: 72, minHeight: 94, borderRadius: 20, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  artOrbLarge: { position: "absolute", width: 64, height: 64, borderRadius: 64, top: 7, right: -22 },
-  artOrbSmall: { position: "absolute", width: 36, height: 36, borderRadius: 36, bottom: 12, left: -8 },
+  deviceArtwork: { width: 100, minHeight: 118, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
   endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
   endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   endpointTitleWrap: { flex: 1, paddingRight: 10 },
