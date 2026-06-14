@@ -6,6 +6,7 @@ import {
   fetchReportCatalog,
   getCachedMobileOpsSnapshot,
   getCachedReportCatalog,
+  type MobileOpsSnapshot,
   type MobileReportItem,
   type MobileWorkItem,
 } from "../services/opsMobileService";
@@ -18,6 +19,27 @@ export const emptyDashboardSummary: DashboardSummary = {
   highRiskExceptions: 0,
 };
 
+const emptyMobileSnapshot: MobileOpsSnapshot = {
+  generatedAt: "-",
+  rangeLabel: "-",
+  endpoints: {
+    total: 0,
+    online: 0,
+    offline: 0,
+    stale: 0,
+  },
+  tickets: {
+    total: 0,
+    open: 0,
+    closed: 0,
+    slaExceeded: 0,
+    slaAchievement: 0,
+  },
+  latestReport: null,
+  locations: [],
+  locationTotal: 0,
+};
+
 type LoadOptions = { silent?: boolean };
 
 function errorMessage(error: unknown) {
@@ -25,18 +47,70 @@ function errorMessage(error: unknown) {
   return String(error || "Failed to load live data.");
 }
 
-function mapSnapshotToSummary(snapshot: any): DashboardSummary {
+function mapSnapshotToSummary(snapshot: MobileOpsSnapshot): DashboardSummary {
   return {
     totalEndpoints: snapshot?.endpoints?.total || 0,
     activeDevices: snapshot?.endpoints?.online || 0,
-    offlineDevices: (snapshot?.endpoints?.offline || 0) + (snapshot?.endpoints?.stale || 0),
+    offlineDevices: snapshot?.endpoints?.offline || 0,
     openTickets: snapshot?.tickets?.open || 0,
     highRiskExceptions: snapshot?.tickets?.slaExceeded || 0,
   };
 }
 
-function mapSnapshotToWorkItems(snapshot: any): MobileWorkItem[] {
+function mapSnapshotToWorkItems(snapshot: MobileOpsSnapshot): MobileWorkItem[] {
   const rows: MobileWorkItem[] = [];
+
+  if (snapshot?.tickets?.slaExceeded) {
+    rows.push({
+      id: "sla-exceeded",
+      type: "ticket",
+      title: "SLA Exceeded Tickets",
+      source: "Service Desk",
+      site: "All Branches",
+      priority: "High",
+      status: `${snapshot.tickets.slaExceeded}`,
+      due: "-",
+      updated: snapshot.generatedAt || "-",
+      owner: "-",
+      reason: "Tickets exceeding SLA require operator attention.",
+      action: "Review open tickets in operator view.",
+    });
+  }
+
+  if (snapshot?.endpoints?.offline || snapshot?.endpoints?.stale) {
+    rows.push({
+      id: "endpoint-follow-up",
+      type: "endpoint",
+      title: "Endpoint Follow-up",
+      source: "Endpoint Fleet",
+      site: "All Branches",
+      priority: snapshot.endpoints.offline ? "High" : "Medium",
+      status: `${snapshot.endpoints.offline} offline / ${snapshot.endpoints.stale} stale`,
+      due: "-",
+      updated: snapshot.generatedAt || "-",
+      owner: "-",
+      reason: "Offline or stale endpoints need validation.",
+      action: "Check device status and latest location.",
+    });
+  }
+
+  if (snapshot?.locations?.length) {
+    const item = snapshot.locations[0];
+    rows.push({
+      id: "latest-device-location",
+      type: "endpoint",
+      title: item.deviceName || "Latest device location",
+      source: "Geolocation",
+      site: item.address || "-",
+      priority: "Low",
+      status: "Latest per device",
+      due: "-",
+      updated: item.time || "-",
+      owner: item.username || "-",
+      reason: `${item.latitude || "-"}, ${item.longitude || "-"}`,
+      action: "Open Operator tab for device location list.",
+    });
+  }
 
   if (snapshot?.latestReport) {
     rows.push({
@@ -51,28 +125,41 @@ function mapSnapshotToWorkItems(snapshot: any): MobileWorkItem[] {
       updated: snapshot.latestReport.lastGenerated || snapshot.generatedAt || "-",
       owner: "-",
       reason: snapshot.latestReport.description || "Latest report item.",
-      action: "Review in web report module.",
-    });
-  }
-
-  if (snapshot?.latestLocation) {
-    rows.push({
-      id: "latest-location",
-      type: "endpoint",
-      title: snapshot.latestLocation.deviceName || "Latest device location",
-      source: "Geolocation",
-      site: snapshot.latestLocation.address || "-",
-      priority: "Low",
-      status: "Latest",
-      due: "-",
-      updated: snapshot.latestLocation.time || "-",
-      owner: snapshot.latestLocation.username || "-",
-      reason: `${snapshot.latestLocation.latitude || "-"}, ${snapshot.latestLocation.longitude || "-"}`,
-      action: "Use web geolocation module for full map view.",
+      action: "Review in Reports tab.",
     });
   }
 
   return rows;
+}
+
+export function useMobileOpsSnapshot() {
+  const cachedSnapshot = getCachedMobileOpsSnapshot();
+  const [snapshot, setSnapshot] = useState<MobileOpsSnapshot>(() => cachedSnapshot || emptyMobileSnapshot);
+  const [loading, setLoading] = useState(() => !cachedSnapshot);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadSnapshot = useCallback(async (options: LoadOptions = {}) => {
+    if (options.silent) setRefreshing(true);
+    else if (!getCachedMobileOpsSnapshot()) setLoading(true);
+
+    try {
+      const liveSnapshot = await fetchMobileOpsSnapshot({ force: options.silent });
+      setSnapshot(liveSnapshot);
+      setError("");
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSnapshot();
+  }, [loadSnapshot]);
+
+  return { snapshot, loading, refreshing, error, reloadSnapshot: loadSnapshot };
 }
 
 export function useOperationsSummary() {
