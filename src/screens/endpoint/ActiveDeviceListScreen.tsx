@@ -35,6 +35,7 @@ import { formatNumber } from "../../utils/formatters";
 
 const PAGE_SIZE = 10;
 const DEVICE_FETCH_LIMIT = 500;
+const ALL_BRANCHES = "__all_branches__";
 
 const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string; scopeLabel: string }> = {
   all: {
@@ -71,11 +72,21 @@ function resolveFilter(value: unknown): EndpointDeviceStatusFilter {
   return "all";
 }
 
+function getBranchName(value: unknown) {
+  const text = String(value || "").trim();
+  return text || "Unassigned Branch";
+}
+
 function matchesStatus(record: MobileEndpointDevice, filter: EndpointDeviceStatusFilter) {
   if (filter === "online") return record.isOnline && !record.isStale;
   if (filter === "offline") return !record.isOnline;
   if (filter === "stale") return record.isStale;
   return true;
+}
+
+function matchesBranch(record: MobileEndpointDevice, selectedBranch: string) {
+  if (selectedBranch === ALL_BRANCHES) return true;
+  return getBranchName(record.branch) === selectedBranch;
 }
 
 function matchesSearch(record: MobileEndpointDevice, query: string) {
@@ -106,6 +117,7 @@ export default function ActiveDeviceListScreen() {
 
   const [records, setRecords] = useState<MobileEndpointDevice[]>([]);
   const [searchText, setSearchText] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState(ALL_BRANCHES);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -115,9 +127,28 @@ export default function ActiveDeviceListScreen() {
     return records.filter((record) => matchesStatus(record, activeFilter));
   }, [activeFilter, records]);
 
+  const branchOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    scopedRecords.forEach((record) => {
+      const branch = getBranchName(record.branch);
+      counts.set(branch, (counts.get(branch) || 0) + 1);
+    });
+
+    const options = Array.from(counts.entries())
+      .map(([name, count]) => ({ name, count, value: name }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+    return [{ name: "All Branches", count: scopedRecords.length, value: ALL_BRANCHES }, ...options];
+  }, [scopedRecords]);
+
+  const branchFilteredRecords = useMemo(() => {
+    return scopedRecords.filter((record) => matchesBranch(record, selectedBranch));
+  }, [scopedRecords, selectedBranch]);
+
   const filteredRecords = useMemo(() => {
-    return scopedRecords.filter((record) => matchesSearch(record, searchText));
-  }, [scopedRecords, searchText]);
+    return branchFilteredRecords.filter((record) => matchesSearch(record, searchText));
+  }, [branchFilteredRecords, searchText]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -150,8 +181,12 @@ export default function ActiveDeviceListScreen() {
   }, [loadDevices]);
 
   useEffect(() => {
+    setSelectedBranch(ALL_BRANCHES);
+  }, [activeFilter]);
+
+  useEffect(() => {
     setPage(1);
-  }, [activeFilter, searchText]);
+  }, [activeFilter, selectedBranch, searchText]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -235,6 +270,38 @@ export default function ActiveDeviceListScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+
+        <View style={styles.branchHeaderRow}>
+          <View style={styles.branchTitleRow}>
+            <MapPin size={13} color={colors.textSoft} strokeWidth={2.8} />
+            <Text style={styles.branchTitle}>Filter by Branch</Text>
+          </View>
+          <Text style={styles.branchCount}>{formatNumber(branchOptions.length - 1)} branches</Text>
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.branchChipRow}>
+          {branchOptions.map((branch) => {
+            const isActive = selectedBranch === branch.value;
+            return (
+              <TouchableOpacity
+                key={branch.value}
+                activeOpacity={0.85}
+                onPress={() => setSelectedBranch(branch.value)}
+                style={[
+                  styles.branchChip,
+                  isActive && { backgroundColor: config.tone, borderColor: config.tone },
+                ]}
+              >
+                <Text style={[styles.branchChipText, isActive && styles.branchChipTextActive]} numberOfLines={1}>
+                  {branch.name}
+                </Text>
+                <Text style={[styles.branchChipCount, isActive && styles.branchChipCountActive]}>
+                  {formatNumber(branch.count)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       <View style={styles.listPanel}>
@@ -257,7 +324,7 @@ export default function ActiveDeviceListScreen() {
           <View style={styles.emptyBlock}>
             <MonitorCog size={22} color={colors.muted} strokeWidth={2.7} />
             <Text style={styles.emptyTitle}>No device records found</Text>
-            <Text style={styles.emptyText}>No live endpoint matched this selected category.</Text>
+            <Text style={styles.emptyText}>No live endpoint matched this selected category or branch.</Text>
           </View>
         ) : (
           visibleRecords.map((record, index) => (
@@ -351,6 +418,16 @@ const styles = StyleSheet.create({
   searchBox: { minHeight: 44, borderRadius: 16, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8 },
   searchInput: { flex: 1, color: colors.text, fontSize: 12.5, fontWeight: "700", paddingVertical: 8 },
   clearSearch: { color: colors.blue, fontSize: 11, fontWeight: "900" },
+  branchHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 12, marginBottom: 9 },
+  branchTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  branchTitle: { color: colors.text, fontSize: 11, fontWeight: "900" },
+  branchCount: { color: colors.textSoft, fontSize: 10.5, fontWeight: "800" },
+  branchChipRow: { gap: 8, paddingRight: 4 },
+  branchChip: { maxWidth: 180, minHeight: 36, flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.border },
+  branchChipText: { maxWidth: 120, color: colors.textSoft, fontSize: 10.5, fontWeight: "900" },
+  branchChipTextActive: { color: colors.white },
+  branchChipCount: { color: colors.textSoft, fontSize: 10, fontWeight: "900", backgroundColor: colors.white, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 999, overflow: "hidden" },
+  branchChipCountActive: { color: colors.text, backgroundColor: "rgba(255,255,255,0.92)" },
   listPanel: { backgroundColor: colors.white, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, shadowColor: colors.navy, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
   listToolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#EDF2F8" },
   listTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
