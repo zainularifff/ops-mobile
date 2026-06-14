@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 import {
+  ActivityIndicator,
+  Image,
   Keyboard,
   Text,
   TextInput,
@@ -14,19 +16,25 @@ import {
 } from "lucide-react-native";
 
 import AppButton from "../../components/AppButton";
+import { verifyTwoFactor } from "../../services/authService";
 import { colors } from "../../theme/colors";
+import type { TwoFactorChallenge } from "../../types/auth";
 import { styles } from "./TwoFactorScreen.styles";
 
 type Props = {
-  onVerified: () => void;
+  challenge: TwoFactorChallenge | null;
+  onVerifySuccess: () => void;
   onBack?: () => void;
 };
 
-const DEMO_CODE = "123456";
-
-export default function TwoFactorScreen({ onVerified, onBack }: Props) {
+export default function TwoFactorScreen({
+  challenge,
+  onVerifySuccess,
+  onBack,
+}: Props) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [verifying, setVerifying] = useState(false);
   const inputRef = useRef<TextInput>(null);
 
   function handleChange(value: string) {
@@ -35,20 +43,34 @@ export default function TwoFactorScreen({ onVerified, onBack }: Props) {
     setError("");
   }
 
-  function handleVerify() {
+  async function handleVerify() {
     Keyboard.dismiss();
+
+    if (!challenge) {
+      setError("Verification session is missing. Please sign in again.");
+      return;
+    }
 
     if (code.length < 6) {
       setError("Please enter the 6-digit verification code.");
       return;
     }
 
-    if (code !== DEMO_CODE) {
-      setError("Invalid verification code. Use 123456 for prototype.");
-      return;
-    }
+    try {
+      setVerifying(true);
+      setError("");
 
-    onVerified();
+      const result = await verifyTwoFactor(code, challenge);
+
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      onVerifySuccess();
+    } finally {
+      setVerifying(false);
+    }
   }
 
   return (
@@ -63,6 +85,7 @@ export default function TwoFactorScreen({ onVerified, onBack }: Props) {
               activeOpacity={0.85}
               style={styles.backButton}
               onPress={onBack}
+              disabled={verifying}
             >
               <ArrowLeft size={18} color={colors.white} strokeWidth={2.7} />
               <Text style={styles.backText}>Back</Text>
@@ -92,14 +115,31 @@ export default function TwoFactorScreen({ onVerified, onBack }: Props) {
               This step confirms your identity before accessing OPS Mobile.
             </Text>
 
+            {challenge?.setupRequired ? (
+              <View>
+                {challenge.qrCode ? (
+                  <Image
+                    source={{ uri: challenge.qrCode }}
+                    style={{ width: 150, height: 150, alignSelf: "center", marginBottom: 12 }}
+                    resizeMode="contain"
+                  />
+                ) : null}
+
+                {challenge.secret ? (
+                  <Text style={styles.noteText}>
+                    Setup key: {challenge.secret}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
             <TouchableOpacity
               activeOpacity={0.95}
               style={styles.codeBox}
               onPress={() => inputRef.current?.focus()}
+              disabled={verifying}
             >
-              <Text style={styles.codeText}>
-                {formatCodeDisplay(code)}
-              </Text>
+              <Text style={styles.codeText}>{formatCodeDisplay(code)}</Text>
             </TouchableOpacity>
 
             <TextInput
@@ -110,14 +150,19 @@ export default function TwoFactorScreen({ onVerified, onBack }: Props) {
               maxLength={6}
               style={styles.hiddenInput}
               autoFocus
+              editable={!verifying}
             />
 
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <AppButton title="Verify Code" onPress={handleVerify} />
+            {verifying ? (
+              <ActivityIndicator color={colors.blue} />
+            ) : (
+              <AppButton title="Verify Code" onPress={handleVerify} />
+            )}
 
             <Text style={styles.noteText}>
-              Prototype code: 123456
+              Use the code from your authenticator app.
             </Text>
           </View>
         </View>
