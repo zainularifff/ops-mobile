@@ -13,6 +13,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   FileText,
   MapPin,
@@ -24,24 +25,32 @@ import {
 } from "lucide-react-native";
 
 import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
-import { colors } from "../../theme/colors";
 import { formatNumber } from "../../utils/formatters";
 
 const ui = {
-  bg: "#EEF3FA",
+  bg: "#EAF0F8",
   ink: "#0B1220",
-  softInk: "#53657C",
+  soft: "#53657C",
   muted: "#8795A7",
-  card: "#FFFFFF",
   line: "#DDE7F3",
-  navy: "#07111F",
-  navy2: "#0B1E3A",
-  blue: "#2357D5",
+  card: "#FFFFFF",
+  navy: "#06101F",
+  navy2: "#0B1C36",
+  blue: "#2F62D8",
   cyan: "#0E8FA6",
-  green: "#179C65",
-  amber: "#D48619",
-  red: "#D94444",
-  purple: "#7455D6",
+  green: "#1F9D65",
+  amber: "#D48A1C",
+  red: "#D84D4D",
+  purple: "#7857D9",
+};
+
+type MetricTone = "blue" | "green" | "red" | "amber";
+
+const toneMap: Record<MetricTone, string> = {
+  blue: ui.blue,
+  green: ui.green,
+  red: ui.red,
+  amber: ui.amber,
 };
 
 export default function OverviewScreen() {
@@ -49,13 +58,13 @@ export default function OverviewScreen() {
   const insets = useSafeAreaInsets();
   const { snapshot, loading, refreshing, error, reloadSnapshot } = useMobileOpsSnapshot();
 
-  const endpointCoverage = useMemo(() => {
+  const onlineRate = useMemo(() => {
     if (!snapshot.endpoints.total) return 0;
     return Math.round((snapshot.endpoints.online / snapshot.endpoints.total) * 100);
   }, [snapshot.endpoints.online, snapshot.endpoints.total]);
 
+  const attentionCount = Math.max(snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded, 0);
   const slaSafe = Math.max(0, Math.min(snapshot.tickets.slaAchievement || 0, 100));
-  const locationPreview = snapshot.locations.slice(0, 6);
 
   function handleRefresh() {
     reloadSnapshot({ silent: true });
@@ -65,33 +74,51 @@ export default function OverviewScreen() {
     navigation.getParent()?.navigate(tabName);
   }
 
+  function openEndpoint(status?: string) {
+    if (status === "online") {
+      navigation.navigate("ActiveDeviceCoverage");
+      return;
+    }
+
+    if (status === "offline" || status === "stale") {
+      navigation.navigate("EndpointIssueList", { type: status });
+      return;
+    }
+
+    navigation.navigate("EndpointSummary");
+  }
+
+  function openTickets() {
+    navigation.navigate("TicketSummary");
+  }
+
   return (
     <View style={styles.page}>
       <View style={{ height: insets.top, backgroundColor: ui.navy }} />
 
       <ScrollView
         style={styles.scrollArea}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 18) + 96 }}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) + 104 }}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
         <LinearGradient
-          colors={[ui.navy, ui.navy2, "#102A53"]}
+          colors={[ui.navy, ui.navy2, "#15325F"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
-          <View style={styles.heroGlowOne} />
-          <View style={styles.heroGlowTwo} />
+          <View style={styles.heroOrbOne} />
+          <View style={styles.heroOrbTwo} />
 
           <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.eyebrow}>OPS MOBILE</Text>
-              <Text style={styles.heroTitle}>Operations Snapshot</Text>
+            <View style={styles.headerTextWrap}>
+              <Text style={styles.eyebrow}>IT OPERATOR</Text>
+              <Text style={styles.heroTitle}>Command Center</Text>
               <Text style={styles.heroMeta}>Live data · {snapshot.generatedAt}</Text>
             </View>
 
-            <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.refreshButton} onPress={handleRefresh} activeOpacity={0.86}>
               {loading || refreshing ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
@@ -100,14 +127,17 @@ export default function OverviewScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.heroDivider} />
+          <View style={styles.heroGlassCard}>
+            <View>
+              <Text style={styles.glassLabel}>Needs Attention</Text>
+              <Text style={styles.glassValue}>{formatNumber(attentionCount)}</Text>
+              <Text style={styles.glassHint}>Offline + stale endpoints + SLA exceed</Text>
+            </View>
 
-          <View style={styles.heroMetricRow}>
-            <HeroMetric label="Endpoints" value={formatNumber(snapshot.endpoints.total)} />
-            <View style={styles.heroMetricLine} />
-            <HeroMetric label="Online" value={`${endpointCoverage}%`} />
-            <View style={styles.heroMetricLine} />
-            <HeroMetric label="Open Tickets" value={formatNumber(snapshot.tickets.open)} />
+            <View style={styles.healthPill}>
+              <CheckCircle2 size={15} color="#B7F7DD" strokeWidth={2.8} />
+              <Text style={styles.healthText}>{onlineRate}% online</Text>
+            </View>
           </View>
         </LinearGradient>
 
@@ -121,42 +151,84 @@ export default function OverviewScreen() {
           </View>
         ) : null}
 
-        <View style={styles.quickRow}>
-          <TouchableOpacity style={styles.quickButton} onPress={() => openTab("Operator")} activeOpacity={0.86}>
-            <ShieldCheck size={18} color={ui.blue} strokeWidth={2.8} />
-            <Text style={styles.quickText}>Operator</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.quickButton} onPress={() => openTab("Reports")} activeOpacity={0.86}>
-            <FileText size={18} color={ui.purple} strokeWidth={2.8} />
-            <Text style={styles.quickText}>Reports</Text>
-          </TouchableOpacity>
+        <View style={styles.primaryActionRow}>
+          <ActionButton
+            label="Open Operator"
+            hint="Devices and geolocation"
+            icon={ShieldCheck}
+            color={ui.blue}
+            onPress={() => openTab("Operator")}
+          />
+          <ActionButton
+            label="Open Reports"
+            hint="Latest reports"
+            icon={FileText}
+            color={ui.purple}
+            onPress={() => openTab("Reports")}
+          />
         </View>
 
-        <Section title="Endpoint Fleet" subtitle="Online, offline and stale only">
-          <View style={styles.compactGrid}>
-            <MetricTile title="Total" value={snapshot.endpoints.total} color={ui.blue} icon={Server} />
-            <MetricTile title="Online" value={snapshot.endpoints.online} color={ui.green} icon={CheckCircle2} />
-            <MetricTile title="Offline" value={snapshot.endpoints.offline} color={ui.red} icon={WifiOff} />
-            <MetricTile title="Stale" value={snapshot.endpoints.stale} color={ui.amber} icon={AlertTriangle} />
+        <View style={styles.panel}>
+          <View style={styles.sectionHeaderClean}>
+            <View>
+              <Text style={styles.sectionTitle}>Endpoint Fleet</Text>
+              <Text style={styles.sectionSubtitle}>Tap a card to open the related view</Text>
+            </View>
           </View>
-        </Section>
 
-        <Section title="Service Desk" subtitle="Ticket status and SLA exposure">
-          <View style={styles.ticketPanel}>
-            <View style={styles.ticketMainBlock}>
-              <Text style={styles.ticketLabel}>Total Tickets</Text>
-              <Text style={styles.ticketValue}>{formatNumber(snapshot.tickets.total)}</Text>
-              <Text style={styles.ticketHint}>Open {formatNumber(snapshot.tickets.open)} · Closed {formatNumber(snapshot.tickets.closed)}</Text>
-            </View>
+          <View style={styles.metricGrid}>
+            <FleetCard
+              title="Managed Endpoints"
+              value={snapshot.endpoints.total}
+              caption="View endpoint summary"
+              tone="blue"
+              icon={Server}
+              onPress={() => openEndpoint()}
+            />
+            <FleetCard
+              title="Online Devices"
+              value={snapshot.endpoints.online}
+              caption="View active coverage"
+              tone="green"
+              icon={CheckCircle2}
+              onPress={() => openEndpoint("online")}
+            />
+            <FleetCard
+              title="Offline Devices"
+              value={snapshot.endpoints.offline}
+              caption="Investigate not reporting"
+              tone="red"
+              icon={WifiOff}
+              onPress={() => openEndpoint("offline")}
+            />
+            <FleetCard
+              title="Stale Devices"
+              value={snapshot.endpoints.stale}
+              caption="Review stale telemetry"
+              tone="amber"
+              icon={AlertTriangle}
+              onPress={() => openEndpoint("stale")}
+            />
+          </View>
+        </View>
 
-            <View style={styles.slaBlock}>
-              <View style={styles.slaIconWrap}>
-                <Ticket size={18} color={ui.red} strokeWidth={2.8} />
-              </View>
-              <Text style={styles.slaValue}>{formatNumber(snapshot.tickets.slaExceeded)}</Text>
-              <Text style={styles.slaLabel}>SLA Exceed</Text>
+        <TouchableOpacity style={styles.serviceCard} activeOpacity={0.88} onPress={openTickets}>
+          <View style={styles.serviceHeader}>
+            <View style={styles.serviceIconWrap}>
+              <Ticket size={20} color="#FFFFFF" strokeWidth={2.8} />
             </View>
+            <View style={styles.serviceTitleWrap}>
+              <Text style={styles.serviceTitle}>Service Desk</Text>
+              <Text style={styles.serviceSubtitle}>Ticket workload and SLA exposure</Text>
+            </View>
+            <ArrowRight size={19} color={ui.muted} strokeWidth={2.8} />
+          </View>
+
+          <View style={styles.serviceMetricRow}>
+            <MiniMetric label="Total" value={snapshot.tickets.total} />
+            <MiniMetric label="Open" value={snapshot.tickets.open} />
+            <MiniMetric label="Closed" value={snapshot.tickets.closed} />
+            <MiniMetric label="SLA Exceed" value={snapshot.tickets.slaExceeded} danger />
           </View>
 
           <View style={styles.progressHeader}>
@@ -166,131 +238,105 @@ export default function OverviewScreen() {
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${slaSafe}%` }]} />
           </View>
-        </Section>
+        </TouchableOpacity>
 
-        <Section
-          title="Latest Device Locations"
-          subtitle={`One latest location per device · ${formatNumber(snapshot.locationTotal)} devices`}
-          action="Operator"
-          onAction={() => openTab("Operator")}
-        >
-          {locationPreview.length === 0 ? (
-            <Text style={styles.emptyText}>No geolocation record found.</Text>
-          ) : (
-            locationPreview.map((item, index) => (
-              <LocationRow
-                key={item.id}
-                name={item.deviceName}
-                address={item.address}
-                user={item.username}
-                time={item.time}
-                isLast={index === locationPreview.length - 1}
-              />
-            ))
-          )}
-        </Section>
+        <View style={styles.sideBySideRow}>
+          <TouchableOpacity style={styles.infoCard} activeOpacity={0.88} onPress={() => openTab("Operator")}>
+            <LinearGradient
+              colors={["#E7FBFF", "#FFFFFF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.infoGradient}
+            >
+              <View style={[styles.infoIcon, { backgroundColor: "#D7F6FF" }]}>
+                <MapPin size={19} color={ui.cyan} strokeWidth={2.8} />
+              </View>
+              <Text style={styles.infoTitle}>Device Geolocation</Text>
+              <Text style={styles.infoDesc}>Latest location per device is in Operator view.</Text>
+              <View style={styles.infoFooter}>
+                <Text style={styles.infoValue}>{formatNumber(snapshot.locationTotal)}</Text>
+                <Text style={styles.infoFooterText}>devices</Text>
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <Section
-          title="Latest Report"
-          subtitle="Most recent generated/report catalog item"
-          action="Reports"
-          onAction={() => openTab("Reports")}
-        >
-          {snapshot.latestReport ? (
-            <View style={styles.reportCard}>
-              <View style={styles.reportIcon}>
-                <FileText size={20} color="#FFFFFF" strokeWidth={2.8} />
+          <TouchableOpacity style={styles.infoCard} activeOpacity={0.88} onPress={() => openTab("Reports")}>
+            <LinearGradient
+              colors={["#F1EDFF", "#FFFFFF"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.infoGradient}
+            >
+              <View style={[styles.infoIcon, { backgroundColor: "#E9E1FF" }]}>
+                <FileText size={19} color={ui.purple} strokeWidth={2.8} />
               </View>
-              <View style={styles.reportTextWrap}>
-                <Text style={styles.reportTitle}>{snapshot.latestReport.title}</Text>
-                <Text style={styles.reportDesc} numberOfLines={2}>{snapshot.latestReport.description}</Text>
-                <Text style={styles.reportMeta}>{snapshot.latestReport.category} · {snapshot.latestReport.lastGenerated || "-"}</Text>
+              <Text style={styles.infoTitle}>Latest Report</Text>
+              <Text style={styles.infoDesc} numberOfLines={2}>
+                {snapshot.latestReport?.title || "No report item found."}
+              </Text>
+              <View style={styles.infoFooter}>
+                <Text style={styles.infoFooterText}>Open Reports</Text>
+                <ArrowRight size={15} color={ui.purple} strokeWidth={2.8} />
               </View>
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>No report item found.</Text>
-          )}
-        </Section>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </View>
   );
 }
 
-function HeroMetric({ label, value }: { label: string; value: string }) {
+function ActionButton({ label, hint, icon: Icon, color, onPress }: { label: string; hint: string; icon: any; color: string; onPress: () => void }) {
   return (
-    <View style={styles.heroMetric}>
-      <Text style={styles.heroMetricValue}>{value}</Text>
-      <Text style={styles.heroMetricLabel}>{label}</Text>
-    </View>
+    <TouchableOpacity style={styles.actionButton} onPress={onPress} activeOpacity={0.86}>
+      <View style={[styles.actionIcon, { backgroundColor: `${color}18` }]}>
+        <Icon size={18} color={color} strokeWidth={2.8} />
+      </View>
+      <View style={styles.actionTextWrap}>
+        <Text style={styles.actionLabel}>{label}</Text>
+        <Text style={styles.actionHint}>{hint}</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
-function Section({
+function FleetCard({
   title,
-  subtitle,
-  children,
-  action,
-  onAction,
+  value,
+  caption,
+  tone,
+  icon: Icon,
+  onPress,
 }: {
   title: string;
-  subtitle: string;
-  children: React.ReactNode;
-  action?: string;
-  onAction?: () => void;
+  value: number;
+  caption: string;
+  tone: MetricTone;
+  icon: any;
+  onPress: () => void;
 }) {
+  const color = toneMap[tone];
+
   return (
-    <View style={styles.sectionCard}>
-      <View style={styles.sectionHeader}>
-        <View style={styles.sectionTitleWrap}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionSubtitle}>{subtitle}</Text>
+    <TouchableOpacity style={styles.fleetCard} onPress={onPress} activeOpacity={0.86}>
+      <View style={styles.fleetCardTop}>
+        <View style={[styles.fleetIcon, { backgroundColor: `${color}16` }]}>
+          <Icon size={18} color={color} strokeWidth={2.8} />
         </View>
-        {action && onAction ? (
-          <TouchableOpacity style={styles.sectionAction} onPress={onAction} activeOpacity={0.85}>
-            <Text style={styles.sectionActionText}>{action}</Text>
-          </TouchableOpacity>
-        ) : null}
+        <ArrowRight size={16} color={ui.muted} strokeWidth={2.8} />
       </View>
-      {children}
-    </View>
+      <Text style={styles.fleetValue}>{formatNumber(value)}</Text>
+      <Text style={styles.fleetTitle}>{title}</Text>
+      <Text style={styles.fleetCaption}>{caption}</Text>
+    </TouchableOpacity>
   );
 }
 
-function MetricTile({ title, value, color, icon: Icon }: { title: string; value: number; color: string; icon: any }) {
+function MiniMetric({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   return (
-    <View style={styles.metricTile}>
-      <View style={[styles.metricIcon, { backgroundColor: `${color}16` }]}>
-        <Icon size={17} color={color} strokeWidth={2.8} />
-      </View>
-      <Text style={styles.metricValue}>{formatNumber(value)}</Text>
-      <Text style={styles.metricTitle}>{title}</Text>
-    </View>
-  );
-}
-
-function LocationRow({
-  name,
-  address,
-  user,
-  time,
-  isLast,
-}: {
-  name: string;
-  address: string;
-  user: string;
-  time: string;
-  isLast?: boolean;
-}) {
-  return (
-    <View style={[styles.locationRow, isLast && styles.noBorder]}>
-      <View style={styles.locationIcon}>
-        <MapPin size={16} color={ui.cyan} strokeWidth={2.8} />
-      </View>
-      <View style={styles.locationTextWrap}>
-        <Text style={styles.locationName}>{name}</Text>
-        <Text style={styles.locationAddress} numberOfLines={1}>{address}</Text>
-        <Text style={styles.locationMeta}>{user} · {time}</Text>
-      </View>
+    <View style={styles.miniMetric}>
+      <Text style={[styles.miniValue, danger && { color: ui.red }]}>{formatNumber(value)}</Text>
+      <Text style={styles.miniLabel}>{label}</Text>
     </View>
   );
 }
@@ -306,52 +352,56 @@ const styles = StyleSheet.create({
   hero: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 22,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34,
     overflow: "hidden",
   },
-  heroGlowOne: {
+  heroOrbOne: {
     position: "absolute",
-    width: 190,
-    height: 190,
-    borderRadius: 190,
-    backgroundColor: "rgba(35,87,213,0.42)",
-    top: -88,
-    right: -62,
+    width: 220,
+    height: 220,
+    borderRadius: 220,
+    backgroundColor: "rgba(47,98,216,0.42)",
+    top: -112,
+    right: -82,
   },
-  heroGlowTwo: {
+  heroOrbTwo: {
     position: "absolute",
-    width: 160,
-    height: 160,
-    borderRadius: 160,
-    backgroundColor: "rgba(14,143,166,0.28)",
-    bottom: -82,
-    left: -72,
+    width: 170,
+    height: 170,
+    borderRadius: 170,
+    backgroundColor: "rgba(14,143,166,0.24)",
+    bottom: -86,
+    left: -70,
   },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
   },
+  headerTextWrap: {
+    flex: 1,
+    paddingRight: 14,
+  },
   eyebrow: {
     color: "#9DC2FF",
     fontSize: 11,
     fontWeight: "900",
-    letterSpacing: 1.2,
+    letterSpacing: 1.3,
   },
   heroTitle: {
     color: "#FFFFFF",
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: "900",
-    letterSpacing: -0.8,
+    letterSpacing: -1.2,
     marginTop: 6,
   },
   heroMeta: {
     color: "#B5C7DE",
     fontSize: 11,
     fontWeight: "700",
-    marginTop: 7,
+    marginTop: 8,
   },
   refreshButton: {
     width: 42,
@@ -363,36 +413,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.18)",
   },
-  heroDivider: {
-    height: 1,
-    backgroundColor: "rgba(255,255,255,0.16)",
+  heroGlassCard: {
     marginTop: 24,
-    marginBottom: 18,
+    padding: 16,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.11)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
   },
-  heroMetricRow: {
+  glassLabel: {
+    color: "#D8E7FF",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  glassValue: {
+    color: "#FFFFFF",
+    fontSize: 44,
+    fontWeight: "900",
+    letterSpacing: -1.6,
+    marginTop: 3,
+  },
+  glassHint: {
+    color: "#9EB1CA",
+    fontSize: 10.5,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  healthPill: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(31,157,101,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(183,247,221,0.18)",
   },
-  heroMetric: {
-    flex: 1,
-  },
-  heroMetricValue: {
-    color: "#FFFFFF",
-    fontSize: 23,
+  healthText: {
+    color: "#B7F7DD",
+    fontSize: 11,
     fontWeight: "900",
-    letterSpacing: -0.7,
-  },
-  heroMetricLabel: {
-    color: "#8EA4BE",
-    fontSize: 10,
-    fontWeight: "900",
-    marginTop: 4,
-  },
-  heroMetricLine: {
-    width: 1,
-    height: 36,
-    backgroundColor: "rgba(255,255,255,0.16)",
-    marginHorizontal: 12,
   },
   alertCard: {
     marginHorizontal: 16,
@@ -415,173 +479,195 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   alertText: {
-    color: ui.softInk,
+    color: ui.soft,
     fontSize: 11,
     fontWeight: "700",
     marginTop: 3,
   },
-  quickRow: {
+  primaryActionRow: {
     flexDirection: "row",
     gap: 10,
     paddingHorizontal: 16,
-    marginTop: 14,
+    marginTop: -16,
   },
-  quickButton: {
+  actionButton: {
     flex: 1,
     backgroundColor: ui.card,
-    borderRadius: 18,
+    borderRadius: 20,
+    padding: 13,
     borderWidth: 1,
     borderColor: ui.line,
-    paddingVertical: 14,
+    shadowColor: "#4F6078",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 2,
+  },
+  actionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    gap: 8,
+    marginBottom: 10,
   },
-  quickText: {
+  actionTextWrap: {
+    gap: 3,
+  },
+  actionLabel: {
     color: ui.ink,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "900",
   },
-  sectionCard: {
+  actionHint: {
+    color: ui.soft,
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  panel: {
     marginHorizontal: 16,
     marginTop: 14,
     backgroundColor: ui.card,
-    borderRadius: 22,
+    borderRadius: 26,
     padding: 15,
     borderWidth: 1,
     borderColor: ui.line,
-    shadowColor: "#5B6B83",
-    shadowOffset: { width: 0, height: 10 },
+    shadowColor: "#4F6078",
+    shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.08,
-    shadowRadius: 18,
+    shadowRadius: 20,
     elevation: 2,
   },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
+  sectionHeaderClean: {
     marginBottom: 13,
-  },
-  sectionTitleWrap: {
-    flex: 1,
-    paddingRight: 10,
   },
   sectionTitle: {
     color: ui.ink,
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: "900",
-    letterSpacing: -0.25,
+    letterSpacing: -0.35,
   },
   sectionSubtitle: {
-    color: ui.softInk,
-    fontSize: 10.5,
+    color: ui.soft,
+    fontSize: 11,
     fontWeight: "700",
     marginTop: 4,
   },
-  sectionAction: {
-    backgroundColor: "#EDF4FF",
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
-  sectionActionText: {
-    color: ui.blue,
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  compactGrid: {
+  metricGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
   },
-  metricTile: {
+  fleetCard: {
     width: "47.9%",
-    minHeight: 104,
+    minHeight: 138,
     backgroundColor: "#F8FBFF",
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: "#E5EEF8",
-    padding: 12,
+    padding: 13,
   },
-  metricIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 13,
+  fleetCardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  fleetIcon: {
+    width: 37,
+    height: 37,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  metricValue: {
+  fleetValue: {
     color: ui.ink,
-    fontSize: 24,
+    fontSize: 29,
     fontWeight: "900",
-    letterSpacing: -0.7,
-    marginTop: 10,
+    letterSpacing: -1,
+    marginTop: 12,
   },
-  metricTitle: {
-    color: ui.softInk,
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 3,
+  fleetTitle: {
+    color: ui.ink,
+    fontSize: 12,
+    fontWeight: "900",
+    marginTop: 2,
   },
-  ticketPanel: {
-    flexDirection: "row",
-    gap: 10,
+  fleetCaption: {
+    color: ui.soft,
+    fontSize: 10.3,
+    fontWeight: "700",
+    lineHeight: 14,
+    marginTop: 4,
   },
-  ticketMainBlock: {
-    flex: 1,
-    borderRadius: 18,
-    backgroundColor: "#F8FBFF",
+  serviceCard: {
+    marginHorizontal: 16,
+    marginTop: 14,
+    backgroundColor: ui.card,
+    borderRadius: 26,
+    padding: 15,
     borderWidth: 1,
-    borderColor: "#E5EEF8",
-    padding: 14,
+    borderColor: ui.line,
+    shadowColor: "#4F6078",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 2,
   },
-  ticketLabel: {
-    color: ui.softInk,
-    fontSize: 11,
-    fontWeight: "800",
+  serviceHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
   },
-  ticketValue: {
+  serviceIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 17,
+    backgroundColor: ui.navy2,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  serviceTitleWrap: {
+    flex: 1,
+  },
+  serviceTitle: {
     color: ui.ink,
-    fontSize: 31,
+    fontSize: 16,
     fontWeight: "900",
-    marginTop: 7,
-    letterSpacing: -0.9,
+    letterSpacing: -0.3,
   },
-  ticketHint: {
-    color: ui.softInk,
+  serviceSubtitle: {
+    color: ui.soft,
     fontSize: 10.5,
     fontWeight: "700",
     marginTop: 3,
   },
-  slaBlock: {
-    width: 105,
+  serviceMetricRow: {
+    flexDirection: "row",
     borderRadius: 18,
-    backgroundColor: "#FFF7ED",
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#FED7AA",
-    padding: 13,
+    borderColor: "#E5EEF8",
+    backgroundColor: "#F8FBFF",
+  },
+  miniMetric: {
+    flex: 1,
+    paddingVertical: 13,
     alignItems: "center",
+    borderRightWidth: 1,
+    borderRightColor: "#E5EEF8",
   },
-  slaIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  slaValue: {
-    color: ui.red,
-    fontSize: 24,
+  miniValue: {
+    color: ui.ink,
+    fontSize: 21,
     fontWeight: "900",
-    marginTop: 8,
+    letterSpacing: -0.6,
   },
-  slaLabel: {
-    color: ui.softInk,
-    fontSize: 10,
-    fontWeight: "900",
-    marginTop: 2,
+  miniLabel: {
+    color: ui.soft,
+    fontSize: 9.5,
+    fontWeight: "800",
+    marginTop: 3,
   },
   progressHeader: {
     flexDirection: "row",
@@ -590,7 +676,7 @@ const styles = StyleSheet.create({
     marginBottom: 7,
   },
   progressText: {
-    color: ui.softInk,
+    color: ui.soft,
     fontSize: 10.5,
     fontWeight: "800",
   },
@@ -610,88 +696,65 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: ui.green,
   },
-  locationRow: {
+  sideBySideRow: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EDF2F8",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: 14,
   },
-  noBorder: {
-    borderBottomWidth: 0,
-  },
-  locationIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 14,
-    backgroundColor: "#E6F7FB",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-  locationTextWrap: {
+  infoCard: {
     flex: 1,
-  },
-  locationName: {
-    color: ui.ink,
-    fontSize: 12.5,
-    fontWeight: "900",
-  },
-  locationAddress: {
-    color: ui.softInk,
-    fontSize: 10.5,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-  locationMeta: {
-    color: ui.muted,
-    fontSize: 10,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-  reportCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F8FBFF",
-    borderRadius: 18,
+    borderRadius: 24,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#E5EEF8",
-    padding: 13,
+    borderColor: ui.line,
+    shadowColor: "#4F6078",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 2,
+    backgroundColor: ui.card,
   },
-  reportIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: ui.purple,
+  infoGradient: {
+    minHeight: 166,
+    padding: 14,
+  },
+  infoIcon: {
+    width: 39,
+    height: 39,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginBottom: 13,
   },
-  reportTextWrap: {
-    flex: 1,
-  },
-  reportTitle: {
+  infoTitle: {
     color: ui.ink,
     fontSize: 13,
     fontWeight: "900",
+    marginBottom: 5,
   },
-  reportDesc: {
-    color: ui.softInk,
+  infoDesc: {
+    color: ui.soft,
     fontSize: 10.5,
     fontWeight: "700",
-    marginTop: 4,
     lineHeight: 15,
+    minHeight: 32,
   },
-  reportMeta: {
-    color: ui.muted,
-    fontSize: 10,
-    fontWeight: "800",
-    marginTop: 6,
+  infoFooter: {
+    marginTop: "auto",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
-  emptyText: {
-    color: ui.softInk,
-    fontSize: 11,
-    fontWeight: "700",
-    paddingVertical: 4,
+  infoValue: {
+    color: ui.ink,
+    fontSize: 23,
+    fontWeight: "900",
+    letterSpacing: -0.7,
+  },
+  infoFooterText: {
+    color: ui.soft,
+    fontSize: 10.5,
+    fontWeight: "900",
   },
 });
