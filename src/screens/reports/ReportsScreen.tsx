@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -26,6 +28,7 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import { useLiveReports } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
 
 import {
@@ -55,95 +58,9 @@ const filters: { key: ReportCategory; label: string }[] = [
   { key: "geo", label: "Geolocation Reports" },
 ];
 
-const reports = [
-  {
-    id: "RPT-001",
-    category: "executive",
-    title: "Executive Operations Summary",
-    description:
-      "High-level view of endpoint health, tickets, risk and operational attention.",
-    frequency: "Daily / Weekly",
-    lastGenerated: "Today, 9:00 AM",
-    pages: 6,
-    status: "Ready",
-    tone: "green",
-  },
-  {
-    id: "RPT-002",
-    category: "endpoint",
-    title: "Endpoint Health Report",
-    description:
-      "Managed endpoint coverage, active reporting, offline and stale device summary.",
-    frequency: "Daily",
-    lastGenerated: "Today, 8:30 AM",
-    pages: 8,
-    status: "Ready",
-    tone: "green",
-  },
-  {
-    id: "RPT-003",
-    category: "ticket",
-    title: "Support Ticket Workload Report",
-    description:
-      "Open tickets, SLA risk, pending assignment, progress and resolution summary.",
-    frequency: "Daily",
-    lastGenerated: "Today, 8:45 AM",
-    pages: 7,
-    status: "Ready",
-    tone: "green",
-  },
-  {
-    id: "RPT-004",
-    category: "remote",
-    title: "Remote Control Activity Report",
-    description:
-      "Remote session activity, success, failed attempts, after-hours and audit review.",
-    frequency: "Weekly",
-    lastGenerated: "Yesterday, 5:30 PM",
-    pages: 5,
-    status: "Review",
-    tone: "amber",
-  },
-  {
-    id: "RPT-005",
-    category: "software",
-    title: "Software & Security Visibility Report",
-    description:
-      "Unauthorized software, outdated software, vulnerable items and compliance summary.",
-    frequency: "Weekly",
-    lastGenerated: "Yesterday, 4:00 PM",
-    pages: 9,
-    status: "Review",
-    tone: "amber",
-  },
-  {
-    id: "RPT-006",
-    category: "asset",
-    title: "Asset Lifecycle Report",
-    description:
-      "New assets, standard lifecycle, aging assets and critical aging replacement view.",
-    frequency: "Monthly",
-    lastGenerated: "This month",
-    pages: 8,
-    status: "Ready",
-    tone: "blue",
-  },
-  {
-    id: "RPT-007",
-    category: "geo",
-    title: "Geolocation Coverage Report",
-    description:
-      "Tracked devices, unknown locations, mismatch records and location accuracy review.",
-    frequency: "Weekly",
-    lastGenerated: "This week",
-    pages: 5,
-    status: "Ready",
-    tone: "blue",
-  },
-];
-
 export default function ReportsScreen() {
   const navigation = useNavigation<any>();
+  const { reports, loading, refreshing, error, reloadReports } = useLiveReports();
 
   const [activeFilter, setActiveFilter] = useState<ReportCategory>("all");
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -154,7 +71,11 @@ export default function ReportsScreen() {
   const filteredReports = useMemo(() => {
     if (activeFilter === "all") return reports;
     return reports.filter((item) => item.category === activeFilter);
-  }, [activeFilter]);
+  }, [activeFilter, reports]);
+
+  const reviewCount = reports.filter((report) =>
+    String(report.status || "").toLowerCase().includes("review")
+  ).length;
 
   function openReport(report: any) {
     navigation.navigate("ReportDetail", { report });
@@ -165,6 +86,10 @@ export default function ReportsScreen() {
     setDropdownVisible(false);
   }
 
+  function handleRefresh() {
+    reloadReports({ silent: true });
+  }
+
   return (
     <>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -173,6 +98,9 @@ export default function ReportsScreen() {
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
         >
           <View style={styles.header}>
             <Text style={styles.eyebrow}>EMA OPS MOBILE</Text>
@@ -188,14 +116,13 @@ export default function ReportsScreen() {
                 <FileText size={26} color={colors.white} strokeWidth={2.7} />
               </View>
 
-              <StatusPill label="Summary View" tone="blue" />
+              <StatusPill label="Live Catalog" tone="blue" />
             </View>
 
             <Text style={styles.heroTitle}>Operational Reports</Text>
             <Text style={styles.heroDesc}>
-              Mobile report access is designed for quick summary review. Full
-              report generation and detailed export remain in the main EMA web
-              system.
+              Report catalogue is now loaded from the EMA backend so mobile does
+              not depend on hardcoded report cards.
             </Text>
 
             <View style={styles.heroMetricRow}>
@@ -207,11 +134,19 @@ export default function ReportsScreen() {
               <View style={styles.heroDivider} />
 
               <View style={styles.heroMetric}>
-                <Text style={styles.heroValue}>2</Text>
+                <Text style={styles.heroValue}>{reviewCount}</Text>
                 <Text style={styles.heroMetricLabel}>Need Review</Text>
               </View>
             </View>
           </View>
+
+          {error ? (
+            <View style={styles.resultSummary}>
+              <Text style={[styles.resultText, { color: colors.red }]}>
+                {error}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleWrap}>
@@ -240,6 +175,16 @@ export default function ReportsScreen() {
               Showing {filteredReports.length} of {reports.length} reports
             </Text>
           </View>
+
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.blue} />
+          ) : null}
+
+          {!loading && filteredReports.length === 0 ? (
+            <View style={styles.resultSummary}>
+              <Text style={styles.resultText}>No live report found.</Text>
+            </View>
+          ) : null}
 
           <View style={styles.reportList}>
             {filteredReports.map((report) => {
@@ -274,8 +219,8 @@ export default function ReportsScreen() {
                         </Text>
 
                         <StatusPill
-                          label={report.status}
-                          tone={report.tone as any}
+                          label={report.status || "Ready"}
+                          tone={(report.tone || "blue") as any}
                         />
                       </View>
 
@@ -287,9 +232,9 @@ export default function ReportsScreen() {
                   </View>
 
                   <View style={styles.reportMetaBox}>
-                    <MetaItem label="Frequency" value={report.frequency} />
-                    <MetaItem label="Pages" value={`${report.pages} pages`} />
-                    <MetaItem label="Generated" value={report.lastGenerated} />
+                    <MetaItem label="Frequency" value={report.frequency || "On Demand"} />
+                    <MetaItem label="Pages" value={`${report.pages || 1} pages`} />
+                    <MetaItem label="Generated" value={report.lastGenerated || "Not generated yet"} />
                   </View>
 
                   <View style={styles.reportFooter}>
