@@ -1,5 +1,12 @@
-import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -12,72 +19,104 @@ import {
   Ticket,
 } from "lucide-react-native";
 
+import {
+  useLiveWorklist,
+  useOperationsSummary,
+} from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
+import { formatNumber } from "../../utils/formatters";
 import {
   moduleIconStyle,
   moduleMetricStyle,
   styles,
 } from "./OperationsScreen.styles";
 
-const modules = [
-  {
-    key: "endpoint",
-    title: "Endpoint Health",
-    description: "Active, offline and stale endpoint visibility",
-    icon: MonitorCog,
-    color: colors.blue,
-    metric: "4,892",
-    label: "Endpoints",
-  },
-  {
-    key: "ticket",
-    title: "Support Tickets",
-    description: "Open tickets, SLA risk and workload status",
-    icon: Ticket,
-    color: colors.purple,
-    metric: "126",
-    label: "Open Tickets",
-  },
-  {
-    key: "remote",
-    title: "Remote Control",
-    description: "Remote activity, success, failure and audit logs",
-    icon: RadioTower,
-    color: colors.cyan,
-    metric: "982",
-    label: "Sessions",
-  },
-  {
-    key: "software",
-    title: "Software & Security",
-    description: "Unauthorized software and security visibility",
-    icon: ShieldCheck,
-    color: colors.amber,
-    metric: "423",
-    label: "Software",
-  },
-  {
-    key: "asset",
-    title: "Asset Lifecycle",
-    description: "Aging assets and replacement planning",
-    icon: Archive,
-    color: colors.green,
-    metric: "1,151",
-    label: "Aging",
-  },
-  {
-    key: "geo",
-    title: "Geolocation",
-    description: "Location coverage and accuracy review",
-    icon: MapPin,
-    color: colors.red,
-    metric: "87%",
-    label: "Coverage",
-  },
-];
-
 export default function OperationsScreen() {
   const navigation = useNavigation<any>();
+  const {
+    summary,
+    loading: summaryLoading,
+    refreshing: summaryRefreshing,
+    error: summaryError,
+    reloadSummary,
+  } = useOperationsSummary();
+  const {
+    items: workItems,
+    loading: worklistLoading,
+    refreshing: worklistRefreshing,
+    error: worklistError,
+    reloadWorklist,
+  } = useLiveWorklist();
+
+  const refreshing = summaryRefreshing || worklistRefreshing;
+  const loading = summaryLoading || worklistLoading;
+  const errorText = summaryError || worklistError;
+
+  const modules = useMemo(() => {
+    const activeCoverage = summary.totalEndpoints
+      ? Math.round((summary.activeDevices / summary.totalEndpoints) * 100)
+      : 0;
+
+    const countByType = (type: string) =>
+      workItems.filter((item) => item.type === type).length;
+
+    return [
+      {
+        key: "endpoint",
+        title: "Endpoint Health",
+        description: "Active, offline and stale endpoint visibility",
+        icon: MonitorCog,
+        color: colors.blue,
+        metric: formatNumber(summary.totalEndpoints),
+        label: "Endpoints",
+      },
+      {
+        key: "ticket",
+        title: "Support Tickets",
+        description: "Open tickets, SLA risk and workload status",
+        icon: Ticket,
+        color: colors.purple,
+        metric: formatNumber(summary.openTickets),
+        label: "Open Tickets",
+      },
+      {
+        key: "remote",
+        title: "Remote Control",
+        description: "Remote activity, success, failure and audit logs",
+        icon: RadioTower,
+        color: colors.cyan,
+        metric: formatNumber(countByType("remote")),
+        label: "Remote Items",
+      },
+      {
+        key: "software",
+        title: "Software & Security",
+        description: "Unauthorized software and security visibility",
+        icon: ShieldCheck,
+        color: colors.amber,
+        metric: formatNumber(countByType("software")),
+        label: "Software Items",
+      },
+      {
+        key: "asset",
+        title: "Asset Lifecycle",
+        description: "Aging assets and replacement planning",
+        icon: Archive,
+        color: colors.green,
+        metric: formatNumber(countByType("asset")),
+        label: "Asset Items",
+      },
+      {
+        key: "geo",
+        title: "Geolocation",
+        description: "Location coverage and accuracy review",
+        icon: MapPin,
+        color: colors.red,
+        metric: `${activeCoverage}%`,
+        label: "Coverage",
+      },
+    ];
+  }, [summary, workItems]);
 
   function openModule(item: any) {
     navigation.navigate("OperationModule", {
@@ -89,6 +128,11 @@ export default function OperationsScreen() {
     });
   }
 
+  function handleRefresh() {
+    reloadSummary({ silent: true });
+    reloadWorklist({ silent: true });
+  }
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <ScrollView
@@ -96,6 +140,9 @@ export default function OperationsScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         bounces={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
         <View style={styles.header}>
           <Text style={styles.eyebrow}>EMA OPS MOBILE</Text>
@@ -113,9 +160,17 @@ export default function OperationsScreen() {
             software visibility, asset lifecycle and geolocation monitoring.
           </Text>
 
+          {loading ? <ActivityIndicator size="small" color={colors.white} /> : null}
+
+          {errorText ? (
+            <Text style={[styles.heroDesc, { color: "#FCA5A5" }]}>
+              {errorText}
+            </Text>
+          ) : null}
+
           <View style={styles.heroMetricRow}>
             <View style={styles.heroMetric}>
-              <Text style={styles.heroValue}>6</Text>
+              <Text style={styles.heroValue}>{modules.length}</Text>
               <Text style={styles.heroMetricLabel}>Modules</Text>
             </View>
 
@@ -123,7 +178,7 @@ export default function OperationsScreen() {
 
             <View style={styles.heroMetric}>
               <Text style={styles.heroValue}>Live</Text>
-              <Text style={styles.heroMetricLabel}>Mock View</Text>
+              <Text style={styles.heroMetricLabel}>API View</Text>
             </View>
           </View>
         </View>
