@@ -48,10 +48,10 @@ const c = {
 type EndpointTone = "blue" | "green" | "red" | "amber";
 
 const tone = {
-  blue: { main: c.blue, soft: "#E9EEFF", gradient: ["#DDE7FF", "#F8FAFF"] },
-  green: { main: c.green, soft: "#E4F8EF", gradient: ["#D9F7E9", "#F8FFFB"] },
-  red: { main: c.red, soft: "#FFE8EC", gradient: ["#FFE0E6", "#FFF8FA"] },
-  amber: { main: c.amber, soft: "#FFF2DD", gradient: ["#FFE7BF", "#FFFBF4"] },
+  blue: { main: c.blue, soft: "#E9EEFF", gradient: ["#EEF3FF", "#FFFFFF"] },
+  green: { main: c.green, soft: "#E4F8EF", gradient: ["#ECFBF3", "#FFFFFF"] },
+  red: { main: c.red, soft: "#FFE8EC", gradient: ["#FFF0F3", "#FFFFFF"] },
+  amber: { main: c.amber, soft: "#FFF2DD", gradient: ["#FFF5E6", "#FFFFFF"] },
 } as const;
 
 export default function OverviewHomeScreen() {
@@ -253,14 +253,10 @@ function EndpointActionCard({
   return (
     <TouchableOpacity style={styles.endpointCard} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
-        <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}22` }]} />
-        <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}36` }]} />
-        <View style={[styles.artIconHalo, { backgroundColor: `${t.main}18` }]} />
-        <View style={[styles.artIconPlate, { borderColor: `${t.main}35`, shadowColor: t.main }]}>
-          <Icon size={42} color={t.main} strokeWidth={2.35} />
-        </View>
-        <View style={[styles.artMiniBadge, { backgroundColor: t.main }]}> 
-          <ArrowRight size={11} color="#FFFFFF" strokeWidth={3} />
+        <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}14` }]} />
+        <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}24` }]} />
+        <View style={[styles.artIconPlate, { backgroundColor: `${t.main}12`, borderColor: `${t.main}24` }]}>
+          <Icon size={24} color={t.main} strokeWidth={2.45} />
         </View>
       </LinearGradient>
 
@@ -320,7 +316,7 @@ function SmallFeatureCard({
     <TouchableOpacity style={styles.featureCardWrap} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={colors as any} style={styles.featureCard}>
         <View style={styles.featureTopRow}>
-          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}> 
+          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}>
             {icon === "geo" ? <MapPin size={20} color={accent} strokeWidth={2.7} /> : <FileText size={20} color={accent} strokeWidth={2.7} />}
           </View>
           <ArrowRight size={15} color={accent} strokeWidth={2.8} />
@@ -397,46 +393,28 @@ const styles = StyleSheet.create({
   sectionCount: { color: c.purple, fontSize: 16, fontWeight: "900" },
   endpointCard: {
     backgroundColor: c.card,
-    borderRadius: 26,
+    borderRadius: 24,
     padding: 10,
     marginBottom: 12,
     flexDirection: "row",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.8)",
     shadowColor: "#7460AE",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-    elevation: 2,
-  },
-  deviceArtwork: { width: 100, minHeight: 118, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  artOrbLarge: { position: "absolute", width: 92, height: 92, borderRadius: 92, top: 8, right: -25 },
-  artOrbSmall: { position: "absolute", width: 52, height: 52, borderRadius: 52, bottom: 10, left: -10 },
-  artIconHalo: { position: "absolute", width: 76, height: 76, borderRadius: 28, transform: [{ rotate: "-10deg" }] },
-  artIconPlate: {
-    width: 68,
-    height: 68,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    backgroundColor: "rgba(255,255,255,0.86)",
-    alignItems: "center",
-    justifyContent: "center",
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.08,
     shadowRadius: 16,
     elevation: 2,
   },
-  artMiniBadge: {
-    position: "absolute",
-    right: 16,
-    bottom: 18,
-    width: 24,
-    height: 24,
-    borderRadius: 10,
+  deviceArtwork: { width: 72, minHeight: 94, borderRadius: 20, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  artOrbLarge: { position: "absolute", width: 64, height: 64, borderRadius: 64, top: 7, right: -22 },
+  artOrbSmall: { position: "absolute", width: 36, height: 36, borderRadius: 36, bottom: 12, left: -8 },
+  artIconPlate: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "rgba(255,255,255,0.82)",
   },
   endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
   endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
