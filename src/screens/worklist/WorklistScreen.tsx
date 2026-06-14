@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Modal,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
@@ -22,6 +24,7 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import { useLiveWorklist } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
 
 import {
@@ -72,89 +75,10 @@ const filters: { key: WorkType; label: string; description: string }[] = [
   },
 ];
 
-const workItems = [
-  {
-    id: "WL-001",
-    type: "endpoint",
-    title: "Endpoint not reporting",
-    source: "JPJ-PUTRAJAYA-WS-014",
-    site: "Putrajaya",
-    priority: "High",
-    status: "Open",
-    due: "Today",
-    updated: "2 days ago",
-    owner: "Endpoint Support",
-    reason: "Device has not reported within the expected monitoring window.",
-    action:
-      "Verify endpoint availability, network connection and agent service status.",
-  },
-  {
-    id: "WL-002",
-    type: "ticket",
-    title: "SLA risk ticket requires follow-up",
-    source: "INC-24051",
-    site: "Kuala Lumpur HQ",
-    priority: "High",
-    status: "SLA Risk",
-    due: "45 min left",
-    updated: "18 min ago",
-    owner: "Support Team A",
-    reason:
-      "Ticket is approaching escalation threshold and requires progress update.",
-    action:
-      "Review ticket owner, update progress and escalate if resolution is blocked.",
-  },
-  {
-    id: "WL-003",
-    type: "software",
-    title: "Unauthorized software detected",
-    source: "Unapproved Remote Tool",
-    site: "Johor Bahru",
-    priority: "High",
-    status: "Review",
-    due: "Today",
-    updated: "25 min ago",
-    owner: "Security Review",
-    reason: "Detected software is not part of approved software list.",
-    action:
-      "Confirm business justification. Remove or approve according to governance process.",
-  },
-  {
-    id: "WL-004",
-    type: "remote",
-    title: "Failed remote session attempt",
-    source: "SHAH-ALAM-LAP-077",
-    site: "Shah Alam",
-    priority: "Medium",
-    status: "Failed",
-    due: "Today",
-    updated: "21 min ago",
-    owner: "Remote Support",
-    reason:
-      "Remote session failed due to connection timeout or endpoint availability issue.",
-    action:
-      "Check target device availability, remote permission and endpoint agent condition.",
-  },
-  {
-    id: "WL-005",
-    type: "asset",
-    title: "Critical aging asset review",
-    source: "SHAH-ALAM-PC-088",
-    site: "Shah Alam",
-    priority: "Medium",
-    status: "Review",
-    due: "This week",
-    updated: "This month",
-    owner: "Asset Management",
-    reason:
-      "Asset is in critical aging condition and may require replacement planning.",
-    action:
-      "Validate device age, business criticality and replacement priority.",
-  },
-];
-
 export default function WorklistScreen() {
   const navigation = useNavigation<any>();
+  const { items: workItems, loading, refreshing, error, reloadWorklist } =
+    useLiveWorklist();
 
   const [activeFilter, setActiveFilter] = useState<WorkType>("all");
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -166,7 +90,7 @@ export default function WorklistScreen() {
   const filteredItems = useMemo(() => {
     if (activeFilter === "all") return workItems;
     return workItems.filter((item) => item.type === activeFilter);
-  }, [activeFilter]);
+  }, [activeFilter, workItems]);
 
   const highPriorityCount = workItems.filter(
     (item) => item.priority === "High"
@@ -181,6 +105,10 @@ export default function WorklistScreen() {
     setDropdownVisible(false);
   }
 
+  function handleRefresh() {
+    reloadWorklist({ silent: true });
+  }
+
   return (
     <>
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -189,6 +117,9 @@ export default function WorklistScreen() {
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
           bounces={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
         >
           <View style={styles.header}>
             <Text style={styles.eyebrow}>EMA OPS MOBILE</Text>
@@ -209,13 +140,13 @@ export default function WorklistScreen() {
                 />
               </View>
 
-              <StatusPill label="Action Queue" tone="blue" />
+              <StatusPill label="Live Queue" tone="blue" />
             </View>
 
             <Text style={styles.heroTitle}>Operational Action Items</Text>
             <Text style={styles.heroDesc}>
-              Worklist is focused on items that require action, not full
-              monitoring. Use Operations for module exploration.
+              Worklist is now loaded from the EMA backend task list for live
+              operational review.
             </Text>
 
             <View style={styles.heroMetricRow}>
@@ -232,6 +163,14 @@ export default function WorklistScreen() {
               </View>
             </View>
           </View>
+
+          {error ? (
+            <View style={styles.resultSummary}>
+              <Text style={[styles.resultText, { color: colors.red }]}>
+                {error}
+              </Text>
+            </View>
+          ) : null}
 
           <View style={styles.filterHeader}>
             <View style={styles.filterTitleWrap}>
@@ -260,6 +199,16 @@ export default function WorklistScreen() {
               Showing {filteredItems.length} of {workItems.length} action items
             </Text>
           </View>
+
+          {loading ? (
+            <ActivityIndicator size="small" color={colors.blue} />
+          ) : null}
+
+          {!loading && filteredItems.length === 0 ? (
+            <View style={styles.resultSummary}>
+              <Text style={styles.resultText}>No live worklist item found.</Text>
+            </View>
+          ) : null}
 
           <View style={styles.listWrap}>
             {filteredItems.map((item) => (
