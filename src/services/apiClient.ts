@@ -1,69 +1,85 @@
 import { API_BASE_URL } from "../config/api";
-import { getSessionToken, clearSessionToken } from "./secureStorage";
+import { clearSessionToken, getSessionToken } from "../utils/secureStorage";
 
 type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 type ApiRequestOptions = {
   method?: ApiMethod;
-  body?: any;
+  body?: unknown;
+  headers?: Record<string, string>;
   requireAuth?: boolean;
 };
 
-async function parseResponse(response: Response) {
-  const text = await response.text();
+export class ApiError extends Error {
+  status: number;
+  payload: any;
 
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
+  constructor(message: string, status: number, payload?: any) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.payload = payload;
   }
 }
 
-export async function apiRequest(
+function buildApiUrl(endpoint: string) {
+  if (/^https?:\/\//i.test(endpoint)) return endpoint;
+
+  const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${API_BASE_URL}${normalizedEndpoint}`;
+}
+
+async function readJsonSafely(response: Response) {
+  const text = await response.text();
+
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return { message: text };
+  }
+}
+
+export async function apiRequest<T = any>(
   endpoint: string,
   options: ApiRequestOptions = {}
-) {
-  const requireAuth = options.requireAuth ?? true;
-  const token = await getSessionToken();
+): Promise<T> {
+  const method = options.method || "GET";
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(options.body !== undefined ? { "Content-Type": "application/json" } : {}),
+    ...(options.headers || {}),
+  };
 
-  if (requireAuth && !token) {
-    throw new Error("Unauthorized. Please login again.");
+  if (options.requireAuth !== false) {
+    const token = await getSessionToken();
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: options.method || "GET",
-    headers: {
-      "Content-Type": "application/json",
-      ...(requireAuth && token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
+  const response = await fetch(buildApiUrl(endpoint), {
+    method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 
-  const data = await parseResponse(response);
+  const payload = await readJsonSafely(response);
 
-  if (response.status === 401 || response.status === 403) {
-    await clearSessionToken();
+  if (!response.ok || payload?.success === false) {
+    if (response.status === 401 || response.status === 403) {
+      await clearSessionToken();
+    }
 
     const message =
-      typeof data === "object" && data?.message
-        ? data.message
-        : "Session expired. Please login again.";
+      payload?.message ||
+      payload?.error ||
+      `Request failed with status ${response.status}`;
 
-    throw new Error(message);
+    throw new ApiError(message, response.status, payload);
   }
 
-  if (!response.ok) {
-    const message =
-      typeof data === "object" && data?.message
-        ? data.message
-        : "API request failed.";
-
-    throw new Error(message);
-  }
-
-  return data;
+  return payload as T;
 }
