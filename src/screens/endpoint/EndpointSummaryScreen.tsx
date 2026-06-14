@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,20 +21,31 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import { useOperationsSummary } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
-import { dashboardSummary } from "../../data/mockDashboard";
 import { formatNumber } from "../../utils/formatters";
-
-const siteBreakdown = [
-  { site: "Kuala Lumpur HQ", total: 1280, issue: 74 },
-  { site: "Putrajaya", total: 980, issue: 52 },
-  { site: "Shah Alam", total: 740, issue: 41 },
-  { site: "Johor Bahru", total: 610, issue: 33 },
-];
 
 export default function EndpointSummaryScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { summary, loading, refreshing, error, reloadSummary } =
+    useOperationsSummary();
+
+  const notReporting = Math.max(
+    summary.offlineDevices || summary.totalEndpoints - summary.activeDevices,
+    0
+  );
+
+  const siteBreakdown = useMemo(
+    () => [
+      {
+        site: "All Branches",
+        total: summary.totalEndpoints,
+        issue: notReporting,
+      },
+    ],
+    [notReporting, summary.totalEndpoints]
+  );
 
   function openIssue(type: "offline" | "stale" | "review") {
     navigation.navigate("EndpointIssueList", { type });
@@ -40,6 +53,10 @@ export default function EndpointSummaryScreen() {
 
   function openSite(item: { site: string; total: number; issue: number }) {
     navigation.navigate("SiteEndpointSummary", item);
+  }
+
+  function handleRefresh() {
+    reloadSummary({ silent: true });
   }
 
   return (
@@ -50,6 +67,9 @@ export default function EndpointSummaryScreen() {
         { paddingTop: insets.top + 24 },
       ]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
     >
       <TouchableOpacity
         style={styles.backButton}
@@ -68,6 +88,15 @@ export default function EndpointSummaryScreen() {
         </Text>
       </View>
 
+      {loading ? <ActivityIndicator size="small" color={colors.blue} /> : null}
+
+      {error ? (
+        <View style={styles.notePanel}>
+          <Text style={[styles.noteTitle, { color: colors.red }]}>Live data unavailable</Text>
+          <Text style={styles.noteText}>{error}</Text>
+        </View>
+      ) : null}
+
       <View style={styles.heroCard}>
         <View style={styles.heroIcon}>
           <Server size={25} color={colors.white} strokeWidth={2.7} />
@@ -75,14 +104,14 @@ export default function EndpointSummaryScreen() {
 
         <Text style={styles.heroTitle}>Managed Endpoint Coverage</Text>
         <Text style={styles.heroDesc}>
-          This view explains endpoint count, active coverage, offline devices
-          and stale reporting.
+          This view explains endpoint count, active coverage and offline devices
+          using live dashboard data.
         </Text>
 
         <View style={styles.heroMetricRow}>
           <View style={styles.heroMetric}>
             <Text style={styles.heroMetricValue}>
-              {formatNumber(dashboardSummary.totalEndpoints)}
+              {formatNumber(summary.totalEndpoints)}
             </Text>
             <Text style={styles.heroMetricLabel}>Managed</Text>
           </View>
@@ -91,7 +120,7 @@ export default function EndpointSummaryScreen() {
 
           <View style={styles.heroMetric}>
             <Text style={styles.heroMetricValue}>
-              {formatNumber(dashboardSummary.activeDevices)}
+              {formatNumber(summary.activeDevices)}
             </Text>
             <Text style={styles.heroMetricLabel}>Active</Text>
           </View>
@@ -101,7 +130,7 @@ export default function EndpointSummaryScreen() {
       <View style={styles.kpiGrid}>
         <SmallMetric
           label="Active Devices"
-          value={dashboardSummary.activeDevices}
+          value={summary.activeDevices}
           icon={CheckCircle2}
           color={colors.green}
           onPress={() => navigation.navigate("ActiveDeviceCoverage")}
@@ -109,7 +138,7 @@ export default function EndpointSummaryScreen() {
 
         <SmallMetric
           label="Offline Devices"
-          value={dashboardSummary.offlineDevices}
+          value={notReporting}
           icon={WifiOff}
           color={colors.red}
           onPress={() => openIssue("offline")}
@@ -117,7 +146,7 @@ export default function EndpointSummaryScreen() {
 
         <SmallMetric
           label="Stale > 7 Days"
-          value={317}
+          value={0}
           icon={Clock3}
           color={colors.amber}
           onPress={() => openIssue("stale")}
@@ -125,7 +154,7 @@ export default function EndpointSummaryScreen() {
 
         <SmallMetric
           label="Need Review"
-          value={42}
+          value={summary.highRiskExceptions}
           icon={MonitorCog}
           color={colors.purple}
           onPress={() => openIssue("review")}
@@ -133,9 +162,9 @@ export default function EndpointSummaryScreen() {
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Top Site Summary</Text>
+        <Text style={styles.sectionTitle}>Branch Summary</Text>
         <Text style={styles.sectionDesc}>
-          Tap site to view selected endpoint breakdown
+          Tap summary to view endpoint breakdown
         </Text>
       </View>
 
@@ -163,8 +192,8 @@ export default function EndpointSummaryScreen() {
             </View>
 
             <StatusPill
-              label={item.issue > 60 ? "High" : "Watch"}
-              tone={item.issue > 60 ? "red" : "amber"}
+              label={item.issue > 0 ? "Watch" : "Healthy"}
+              tone={item.issue > 0 ? "amber" : "green"}
             />
           </TouchableOpacity>
         ))}
@@ -407,6 +436,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    marginBottom: 12,
   },
   noteTitle: {
     color: colors.text,
