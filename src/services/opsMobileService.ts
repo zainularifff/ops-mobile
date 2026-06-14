@@ -31,6 +31,115 @@ export type MobileReportItem = {
   lastGenerated?: string;
 };
 
+type FetchOptions = {
+  force?: boolean;
+};
+
+type WorklistFetchOptions = FetchOptions & {
+  limit?: number;
+};
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  value: T;
+};
+
+const SUMMARY_CACHE_KEY = "operations-summary";
+const REPORTS_CACHE_KEY = "report-catalog";
+const SUMMARY_CACHE_TTL_MS = 60 * 1000;
+const WORKLIST_CACHE_TTL_MS = 30 * 1000;
+const REPORTS_CACHE_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_WORKLIST_LIMIT = 25;
+
+const liveDataCache = new Map<string, CacheEntry<unknown>>();
+const liveDataInFlight = new Map<string, Promise<unknown>>();
+
+function worklistCacheKey(limit: number) {
+  return `worklist-${limit}`;
+}
+
+function clampWorklistLimit(value?: number) {
+  const parsed = Number(value || DEFAULT_WORKLIST_LIMIT);
+  if (!Number.isFinite(parsed)) return DEFAULT_WORKLIST_LIMIT;
+  return Math.max(1, Math.min(Math.round(parsed), 100));
+}
+
+function getCachedValue<T>(key: string): T | null {
+  const cached = liveDataCache.get(key) as CacheEntry<T> | undefined;
+  if (!cached) return null;
+
+  if (Date.now() > cached.expiresAt) {
+    liveDataCache.delete(key);
+    return null;
+  }
+
+  return cached.value;
+}
+
+function setCachedValue<T>(key: string, value: T, ttlMs: number) {
+  liveDataCache.set(key, {
+    expiresAt: Date.now() + ttlMs,
+    value,
+  });
+}
+
+async function fetchWithCache<T>(
+  key: string,
+  ttlMs: number,
+  requestFactory: () => Promise<T>,
+  options: FetchOptions = {}
+): Promise<T> {
+  if (!options.force) {
+    const cached = getCachedValue<T>(key);
+    if (cached !== null) return cached;
+  }
+
+  const activeRequest = liveDataInFlight.get(key) as Promise<T> | undefined;
+  if (activeRequest) return activeRequest;
+
+  const request = requestFactory()
+    .then((value) => {
+      setCachedValue(key, value, ttlMs);
+      return value;
+    })
+    .finally(() => {
+      if (liveDataInFlight.get(key) === request) {
+        liveDataInFlight.delete(key);
+      }
+    });
+
+  liveDataInFlight.set(key, request);
+  return request;
+}
+
+export function clearOpsMobileCache(prefix?: string) {
+  if (!prefix) {
+    liveDataCache.clear();
+    liveDataInFlight.clear();
+    return;
+  }
+
+  for (const key of liveDataCache.keys()) {
+    if (key.startsWith(prefix)) liveDataCache.delete(key);
+  }
+
+  for (const key of liveDataInFlight.keys()) {
+    if (key.startsWith(prefix)) liveDataInFlight.delete(key);
+  }
+}
+
+export function getCachedOperationsSummary() {
+  return getCachedValue<DashboardSummary>(SUMMARY_CACHE_KEY);
+}
+
+export function getCachedWorklistItems(limit = DEFAULT_WORKLIST_LIMIT) {
+  return getCachedValue<MobileWorkItem[]>(worklistCacheKey(clampWorklistLimit(limit)));
+}
+
+export function getCachedReportCatalog() {
+  return getCachedValue<MobileReportItem[]>(REPORTS_CACHE_KEY);
+}
+
 function cleanText(value: unknown, fallback = "-") {
   const text = String(value ?? "").trim();
   return text || fallback;
@@ -91,7 +200,7 @@ function mapTaskPriority(task: any): MobileWorkItem["priority"] {
   return "Low";
 }
 
-export async function fetchOperationsSummary(): Promise<DashboardSummary> {
+async function requestOperationsSummary(): Promise<DashboardSummary> {
   const response: any = await apiRequest("/api/dashboard/it-operations");
   const data = response?.data || response || {};
   const kpiCards = Array.isArray(data?.kpiCards) ? data.kpiCards : [];
@@ -116,8 +225,19 @@ export async function fetchOperationsSummary(): Promise<DashboardSummary> {
   };
 }
 
-export async function fetchWorklistItems(): Promise<MobileWorkItem[]> {
-  const response: any = await apiRequest("/api/task-list");
+export async function fetchOperationsSummary(
+  options: FetchOptions = {}
+): Promise<DashboardSummary> {
+  return fetchWithCache(
+    SUMMARY_CACHE_KEY,
+    SUMMARY_CACHE_TTL_MS,
+    requestOperationsSummary,
+    options
+  );
+}
+
+async function requestWorklistItems(limit: number): Promise<MobileWorkItem[]> {
+  const response: any = await apiRequest(`/api/task-list?limit=${limit}`);
   const rows = Array.isArray(response?.data) ? response.data : [];
 
   return rows.map((task: any, index: number) => {
@@ -150,7 +270,20 @@ export async function fetchWorklistItems(): Promise<MobileWorkItem[]> {
   });
 }
 
-export async function fetchReportCatalog(): Promise<MobileReportItem[]> {
+export async function fetchWorklistItems(
+  options: WorklistFetchOptions = {}
+): Promise<MobileWorkItem[]> {
+  const limit = clampWorklistLimit(options.limit);
+
+  return fetchWithCache(
+    worklistCacheKey(limit),
+    WORKLIST_CACHE_TTL_MS,
+    () => requestWorklistItems(limit),
+    options
+  );
+}
+
+async function requestReportCatalog(): Promise<MobileReportItem[]> {
   const response: any = await apiRequest("/api/reports/catalog");
   const rows = Array.isArray(response?.reports)
     ? response.reports
@@ -177,4 +310,15 @@ export async function fetchReportCatalog(): Promise<MobileReportItem[]> {
       lastGenerated: cleanText(item?.lastGenerated || item?.generatedAt, ""),
     };
   });
+}
+
+export async function fetchReportCatalog(
+  options: FetchOptions = {}
+): Promise<MobileReportItem[]> {
+  return fetchWithCache(
+    REPORTS_CACHE_KEY,
+    REPORTS_CACHE_TTL_MS,
+    requestReportCatalog,
+    options
+  );
 }
