@@ -11,9 +11,19 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertTriangle, ArrowRight, FileText, MapPin, RefreshCcw, Ticket } from "lucide-react-native";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Clock3,
+  FileText,
+  MapPin,
+  RefreshCcw,
+  Server,
+  Ticket,
+  Wifi,
+  WifiOff,
+} from "lucide-react-native";
 
-import EndpointVisual, { type EndpointVisualKind } from "../../components/EndpointVisual";
 import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
 
@@ -132,7 +142,7 @@ export default function OverviewHomeScreen() {
             progress={100}
             progressLabel="Inventory scope"
             toneName="blue"
-            graphic="managed"
+            icon={Server}
             onPress={() => openEndpointList("all")}
           />
           <EndpointActionCard
@@ -142,7 +152,7 @@ export default function OverviewHomeScreen() {
             progress={onlineRate}
             progressLabel={`${onlineRate}% online coverage`}
             toneName="green"
-            graphic="online"
+            icon={Wifi}
             onPress={() => openEndpointList("online")}
           />
           <EndpointActionCard
@@ -152,7 +162,7 @@ export default function OverviewHomeScreen() {
             progress={offlineRate}
             progressLabel={`${offlineRate}% require follow-up`}
             toneName="red"
-            graphic="offline"
+            icon={WifiOff}
             onPress={() => openEndpointList("offline")}
           />
           <EndpointActionCard
@@ -162,7 +172,7 @@ export default function OverviewHomeScreen() {
             progress={staleRate}
             progressLabel={`${staleRate}% stale telemetry`}
             toneName="amber"
-            graphic="stale"
+            icon={Clock3}
             onPress={() => openEndpointList("stale")}
           />
         </View>
@@ -225,7 +235,7 @@ function EndpointActionCard({
   progress,
   progressLabel,
   toneName,
-  graphic,
+  icon: Icon,
   onPress,
 }: {
   title: string;
@@ -234,7 +244,7 @@ function EndpointActionCard({
   progress: number;
   progressLabel: string;
   toneName: EndpointTone;
-  graphic: EndpointVisualKind;
+  icon: any;
   onPress: () => void;
 }) {
   const t = tone[toneName];
@@ -243,7 +253,10 @@ function EndpointActionCard({
   return (
     <TouchableOpacity style={styles.endpointCard} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
-        <EndpointVisual kind={graphic} color={t.main} />
+        <View style={[styles.iconGlow, { backgroundColor: `${t.main}14` }]} />
+        <View style={[styles.iconBadge, { backgroundColor: `${t.main}12`, borderColor: `${t.main}28` }]}>
+          <Icon size={24} color={t.main} strokeWidth={2.5} />
+        </View>
       </LinearGradient>
 
       <View style={styles.endpointContent}>
@@ -391,7 +404,17 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
     elevation: 2,
   },
-  deviceArtwork: { width: 100, minHeight: 118, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  deviceArtwork: { width: 82, minHeight: 104, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  iconGlow: { position: "absolute", width: 58, height: 58, borderRadius: 24 },
+  iconBadge: {
+    width: 46,
+    height: 46,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.78)",
+  },
   endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
   endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   endpointTitleWrap: { flex: 1, paddingRight: 10 },
