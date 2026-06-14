@@ -43,6 +43,22 @@ function asNumber(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function normalizeKeyPart(value: unknown, fallback = "item") {
+  return cleanText(value, fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function uniqueKey(baseValue: unknown, index: number, fallback = "item") {
+  const base = normalizeKeyPart(baseValue, `${fallback}-${index + 1}`);
+  return `${base || fallback}-${index + 1}`;
+}
+
+function hiddenKeySuffix(index: number) {
+  return "\u200B".repeat((index % 20) + 1);
+}
+
 function pickKpiValue(kpiCards: any[] = [], title: string) {
   const card = kpiCards.find((item) =>
     String(item?.title || "").toLowerCase().includes(title.toLowerCase())
@@ -109,13 +125,19 @@ export async function fetchWorklistItems(): Promise<MobileWorkItem[]> {
     const priority = mapTaskPriority(task);
     const status = cleanText(task?.state || task?.rawState);
     const title = cleanText(task?.description || task?.title || task?.name);
-    const idValue = task?.jobId || task?.id || task?.Job_Idn || task?.Task_ID;
+    const idValue =
+      task?.jobId ||
+      task?.id ||
+      task?.Job_Idn ||
+      task?.Task_ID ||
+      `${task?.commandType || "task"}-${title}`;
+    const source = cleanText(task?.commandType || task?.classification);
 
     return {
-      id: cleanText(idValue, `row-${index + 1}`),
+      id: uniqueKey(idValue, index, "task"),
       type,
       title,
-      source: cleanText(task?.commandType || task?.classification),
+      source: `${source}${hiddenKeySuffix(index)}`,
       site: cleanText(task?.raw?.Object_Full_Name || task?.raw?.Object_Rel_Name || task?.targetName),
       priority,
       status,
@@ -136,18 +158,23 @@ export async function fetchReportCatalog(): Promise<MobileReportItem[]> {
       ? response.data.reports
       : [];
 
-  return rows.map((item: any, index: number) => ({
-    id: cleanText(item?.id || item?.reportId || item?.key, `report-${index + 1}`),
-    title: cleanText(item?.title || item?.name),
-    description: cleanText(item?.description || item?.summary),
-    category: cleanText(item?.category || item?.icon, "executive"),
-    type: cleanText(item?.type, ""),
-    source: cleanText(item?.source, ""),
-    outputs: Array.isArray(item?.outputs) ? item.outputs : [],
-    status: cleanText(item?.status, ""),
-    tone: item?.tone || "blue",
-    pages: asNumber(item?.pages, 0),
-    frequency: cleanText(item?.frequency, ""),
-    lastGenerated: cleanText(item?.lastGenerated || item?.generatedAt, ""),
-  }));
+  return rows.map((item: any, index: number) => {
+    const title = cleanText(item?.title || item?.name);
+    const idValue = item?.id || item?.reportId || item?.key || title;
+
+    return {
+      id: uniqueKey(idValue, index, "report"),
+      title,
+      description: cleanText(item?.description || item?.summary),
+      category: cleanText(item?.category || item?.icon, "executive"),
+      type: cleanText(item?.type, ""),
+      source: cleanText(item?.source, ""),
+      outputs: Array.isArray(item?.outputs) ? item.outputs : [],
+      status: cleanText(item?.status, ""),
+      tone: item?.tone || "blue",
+      pages: asNumber(item?.pages, 0),
+      frequency: cleanText(item?.frequency, ""),
+      lastGenerated: cleanText(item?.lastGenerated || item?.generatedAt, ""),
+    };
+  });
 }
