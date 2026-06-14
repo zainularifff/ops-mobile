@@ -1,5 +1,12 @@
-import React from "react";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
+import React, { useMemo } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -19,7 +26,12 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import {
+  useLiveWorklist,
+  useOperationsSummary,
+} from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
+import { formatNumber } from "../../utils/formatters";
 import { operationModules } from "../../data/operations";
 
 import {
@@ -47,16 +59,119 @@ const iconMap: any = {
 export default function OperationModuleScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const {
+    summary,
+    loading: summaryLoading,
+    refreshing: summaryRefreshing,
+    error: summaryError,
+    reloadSummary,
+  } = useOperationsSummary();
+  const {
+    items: workItems,
+    loading: worklistLoading,
+    refreshing: worklistRefreshing,
+    error: worklistError,
+    reloadWorklist,
+  } = useLiveWorklist();
 
   const moduleKey = route.params?.moduleKey || "endpoint";
   const config = operationModules[moduleKey] || operationModules.endpoint;
   const ModuleIcon = iconMap[config.iconKey] || MonitorCog;
+  const refreshing = summaryRefreshing || worklistRefreshing;
+  const loading = summaryLoading || worklistLoading;
+  const errorText = summaryError || worklistError;
+
+  const liveConfig = useMemo(() => {
+    const notReporting = Math.max(
+      summary.offlineDevices || summary.totalEndpoints - summary.activeDevices,
+      0
+    );
+    const activeCoverage = summary.totalEndpoints
+      ? Math.round((summary.activeDevices / summary.totalEndpoints) * 100)
+      : 0;
+    const countByType = (type: string) =>
+      workItems.filter((item) => item.type === type).length;
+
+    function categoryValue(categoryKey: string) {
+      if (config.key === "endpoint") {
+        if (categoryKey === "active") return formatNumber(summary.activeDevices);
+        if (categoryKey === "offline") return formatNumber(notReporting);
+        if (categoryKey === "review") return formatNumber(summary.highRiskExceptions);
+        return "0";
+      }
+
+      if (config.key === "ticket") {
+        if (categoryKey === "sla") return formatNumber(summary.highRiskExceptions);
+        if (categoryKey === "pending") return formatNumber(summary.openTickets);
+        return "0";
+      }
+
+      if (config.key === "remote") {
+        if (categoryKey === "sessions") return formatNumber(countByType("remote"));
+        if (categoryKey === "failed") {
+          return formatNumber(
+            workItems.filter(
+              (item) => item.type === "remote" && item.priority !== "Low"
+            ).length
+          );
+        }
+        return "0";
+      }
+
+      if (config.key === "software") {
+        if (categoryKey === "unauthorized" || categoryKey === "vulnerable") {
+          return formatNumber(countByType("software"));
+        }
+        return "0";
+      }
+
+      if (config.key === "asset") {
+        if (categoryKey === "aging" || categoryKey === "critical") {
+          return formatNumber(countByType("asset"));
+        }
+        return "0";
+      }
+
+      if (config.key === "geo") {
+        if (categoryKey === "tracked") return formatNumber(summary.activeDevices);
+        if (categoryKey === "unknown") return formatNumber(notReporting);
+        if (categoryKey === "accuracy") return `${activeCoverage}%`;
+        return "0";
+      }
+
+      return "0";
+    }
+
+    const metric =
+      route.params?.metric ||
+      (config.key === "endpoint"
+        ? formatNumber(summary.totalEndpoints)
+        : config.key === "ticket"
+          ? formatNumber(summary.openTickets)
+          : config.key === "geo"
+            ? `${activeCoverage}%`
+            : formatNumber(countByType(config.key)));
+
+    return {
+      ...config,
+      metric,
+      categories: config.categories.map((category) => ({
+        ...category,
+        value: categoryValue(category.key),
+      })),
+    };
+  }, [config, route.params?.metric, summary, workItems]);
 
   function openCategory(category: any) {
     navigation.navigate("OperationList", {
-      moduleKey: config.key,
+      moduleKey: liveConfig.key,
       categoryKey: category.key,
     });
+  }
+
+  function handleRefresh() {
+    reloadSummary({ silent: true });
+    reloadWorklist({ silent: true });
   }
 
   return (
@@ -66,6 +181,9 @@ export default function OperationModuleScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         bounces={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
       >
         <TouchableOpacity
           style={styles.backButton}
@@ -77,32 +195,35 @@ export default function OperationModuleScreen() {
         </TouchableOpacity>
 
         <View style={styles.headerCard}>
-          <View style={[styles.moduleIcon, moduleIconStyle(config.color)]}>
+          <View style={[styles.moduleIcon, moduleIconStyle(liveConfig.color)]}>
             <ModuleIcon size={28} color={colors.white} strokeWidth={2.7} />
           </View>
 
-          <Text style={[styles.eyebrow, eyebrowStyle(config.color)]}>
-            {config.label}
+          <Text style={[styles.eyebrow, eyebrowStyle(liveConfig.color)]}>
+            {liveConfig.label}
           </Text>
 
-          <Text style={styles.title}>{config.title}</Text>
-          <Text style={styles.subtitle}>{config.description}</Text>
+          <Text style={styles.title}>{liveConfig.title}</Text>
+          <Text style={styles.subtitle}>{liveConfig.description}</Text>
+
+          {loading ? <ActivityIndicator size="small" color={liveConfig.color} /> : null}
+          {errorText ? <Text style={styles.subtitle}>{errorText}</Text> : null}
         </View>
 
         <View style={styles.purposeCard}>
           <Text style={styles.purposeLabel}>MODULE PURPOSE</Text>
-          <Text style={styles.purposeText}>{config.purpose}</Text>
+          <Text style={styles.purposeText}>{liveConfig.purpose}</Text>
 
           <View style={styles.metricRow}>
             <View style={styles.metricBlock}>
-              <Text style={styles.metricValue}>{config.metric}</Text>
-              <Text style={styles.metricLabel}>{config.metricLabel}</Text>
+              <Text style={styles.metricValue}>{liveConfig.metric}</Text>
+              <Text style={styles.metricLabel}>{liveConfig.metricLabel}</Text>
             </View>
 
             <View style={styles.metricDivider} />
 
             <View style={styles.metricBlock}>
-              <Text style={styles.metricValue}>{config.categories.length}</Text>
+              <Text style={styles.metricValue}>{liveConfig.categories.length}</Text>
               <Text style={styles.metricLabel}>Categories</Text>
             </View>
           </View>
@@ -114,7 +235,7 @@ export default function OperationModuleScreen() {
         </Text>
 
         <View style={styles.categoryList}>
-          {config.categories.map((item) => {
+          {liveConfig.categories.map((item) => {
             const Icon = iconMap[item.iconKey] || CheckCircle2;
 
             return (
@@ -127,10 +248,10 @@ export default function OperationModuleScreen() {
                 <View
                   style={[
                     styles.categoryIcon,
-                    categoryIconStyle(config.color),
+                    categoryIconStyle(liveConfig.color),
                   ]}
                 >
-                  <Icon size={20} color={config.color} strokeWidth={2.7} />
+                  <Icon size={20} color={liveConfig.color} strokeWidth={2.7} />
                 </View>
 
                 <View style={styles.categoryTextWrap}>
