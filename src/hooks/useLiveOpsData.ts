@@ -5,6 +5,9 @@ import {
   fetchOperationsSummary,
   fetchReportCatalog,
   fetchWorklistItems,
+  getCachedOperationsSummary,
+  getCachedReportCatalog,
+  getCachedWorklistItems,
   type MobileReportItem,
   type MobileWorkItem,
 } from "../services/opsMobileService";
@@ -27,20 +30,22 @@ function errorMessage(error: unknown) {
 }
 
 export function useOperationsSummary() {
-  const [summary, setSummary] = useState<DashboardSummary>(emptyDashboardSummary);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<DashboardSummary>(() => {
+    return getCachedOperationsSummary() || emptyDashboardSummary;
+  });
+  const [loading, setLoading] = useState(() => !getCachedOperationsSummary());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const loadSummary = useCallback(async (options: LoadOptions = {}) => {
     if (options.silent) {
       setRefreshing(true);
-    } else {
+    } else if (!getCachedOperationsSummary()) {
       setLoading(true);
     }
 
     try {
-      const liveSummary = await fetchOperationsSummary();
+      const liveSummary = await fetchOperationsSummary({ force: options.silent });
       setSummary(liveSummary);
       setError("");
     } catch (err) {
@@ -64,21 +69,26 @@ export function useOperationsSummary() {
   };
 }
 
-export function useLiveWorklist() {
-  const [items, setItems] = useState<MobileWorkItem[]>([]);
-  const [loading, setLoading] = useState(true);
+export function useLiveWorklist(limit = 25) {
+  const [items, setItems] = useState<MobileWorkItem[]>(() => {
+    return getCachedWorklistItems(limit) || [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedWorklistItems(limit));
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const loadWorklist = useCallback(async (options: LoadOptions = {}) => {
     if (options.silent) {
       setRefreshing(true);
-    } else {
+    } else if (!getCachedWorklistItems(limit)) {
       setLoading(true);
     }
 
     try {
-      const liveItems = await fetchWorklistItems();
+      const liveItems = await fetchWorklistItems({
+        force: options.silent,
+        limit,
+      });
       setItems(liveItems);
       setError("");
     } catch (err) {
@@ -87,7 +97,7 @@ export function useLiveWorklist() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [limit]);
 
   useEffect(() => {
     loadWorklist();
@@ -103,20 +113,22 @@ export function useLiveWorklist() {
 }
 
 export function useLiveReports() {
-  const [reports, setReports] = useState<MobileReportItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [reports, setReports] = useState<MobileReportItem[]>(() => {
+    return getCachedReportCatalog() || [];
+  });
+  const [loading, setLoading] = useState(() => !getCachedReportCatalog());
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const loadReports = useCallback(async (options: LoadOptions = {}) => {
     if (options.silent) {
       setRefreshing(true);
-    } else {
+    } else if (!getCachedReportCatalog()) {
       setLoading(true);
     }
 
     try {
-      const liveReports = await fetchReportCatalog();
+      const liveReports = await fetchReportCatalog({ force: options.silent });
       setReports(liveReports);
       setError("");
     } catch (err) {
