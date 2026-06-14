@@ -48,10 +48,34 @@ const c = {
 type EndpointTone = "blue" | "green" | "red" | "amber";
 
 const tone = {
-  blue: { main: c.blue, gradient: ["#EEF3FF", "#FFFFFF"] },
-  green: { main: c.green, gradient: ["#ECFBF3", "#FFFFFF"] },
-  red: { main: c.red, gradient: ["#FFF0F3", "#FFFFFF"] },
-  amber: { main: c.amber, gradient: ["#FFF5E6", "#FFFFFF"] },
+  blue: {
+    main: c.blue,
+    gradient: ["#EEF3FF", "#FFFFFF"],
+    panel: "#DFE7FF",
+    chip: "#E9EEFF",
+    soft: "#F6F8FF",
+  },
+  green: {
+    main: c.green,
+    gradient: ["#E9FBF3", "#FFFFFF"],
+    panel: "#D9F6E8",
+    chip: "#E7F8EF",
+    soft: "#F5FFF9",
+  },
+  red: {
+    main: c.red,
+    gradient: ["#FFF0F3", "#FFFFFF"],
+    panel: "#FFE0E7",
+    chip: "#FFE8EC",
+    soft: "#FFF8FA",
+  },
+  amber: {
+    main: c.amber,
+    gradient: ["#FFF5E6", "#FFFFFF"],
+    panel: "#FFECC8",
+    chip: "#FFF1DB",
+    soft: "#FFFDF8",
+  },
 } as const;
 
 export default function OverviewHomeScreen() {
@@ -251,36 +275,47 @@ function EndpointActionCard({
   const safeProgress = Math.max(0, Math.min(progress, 100));
 
   return (
-    <TouchableOpacity style={styles.endpointCard} activeOpacity={0.88} onPress={onPress}>
-      <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
-        <View style={[styles.iconGlow, { backgroundColor: `${t.main}14` }]} />
-        <View style={[styles.iconBadge, { backgroundColor: `${t.main}12`, borderColor: `${t.main}28` }]}>
-          <Icon size={24} color={t.main} strokeWidth={2.5} />
+    <TouchableOpacity style={styles.endpointCardOuter} activeOpacity={0.9} onPress={onPress}>
+      <LinearGradient colors={t.gradient as any} style={styles.endpointCard}>
+        <View style={[styles.iconColumn, { backgroundColor: t.panel }]}> 
+          <View style={[styles.iconGlow, { backgroundColor: `${t.main}16` }]} />
+          <View style={[styles.iconBadge, { backgroundColor: "rgba(255,255,255,0.76)", borderColor: `${t.main}25` }]}> 
+            <Icon size={23} color={t.main} strokeWidth={2.6} />
+          </View>
+        </View>
+
+        <View style={styles.endpointContent}>
+          <View style={styles.endpointTopRow}>
+            <View style={styles.endpointTitleWrap}>
+              <Text style={styles.endpointTitle}>{title}</Text>
+              <Text style={styles.endpointSub}>{subtitle}</Text>
+            </View>
+            <View style={[styles.valueBubble, { backgroundColor: t.chip }]}> 
+              <Text style={[styles.endpointValue, { color: t.main }]}>{formatNumber(value)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.statusChipRow}>
+            <View style={[styles.statusChip, { backgroundColor: t.chip }]}> 
+              <Text style={[styles.statusChipText, { color: t.main }]} numberOfLines={1}>{progressLabel}</Text>
+            </View>
+            <View style={styles.statusChipNeutral}>
+              <Text style={styles.statusChipNeutralText}>{safeProgress}%</Text>
+            </View>
+          </View>
+
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${safeProgress}%`, backgroundColor: t.main }]} />
+          </View>
+
+          <View style={styles.cardFooterRow}>
+            <View style={[styles.actionPill, { backgroundColor: t.main }]}> 
+              <Text style={styles.actionPillText}>Open list</Text>
+              <ArrowRight size={13} color="#FFFFFF" strokeWidth={2.8} />
+            </View>
+          </View>
         </View>
       </LinearGradient>
-
-      <View style={styles.endpointContent}>
-        <View style={styles.endpointTopRow}>
-          <View style={styles.endpointTitleWrap}>
-            <Text style={styles.endpointTitle}>{title}</Text>
-            <Text style={styles.endpointSub}>{subtitle}</Text>
-          </View>
-          <Text style={[styles.endpointValue, { color: t.main }]}>{formatNumber(value)}</Text>
-        </View>
-
-        <View style={styles.progressMetaRow}>
-          <Text style={styles.progressLabel}>{progressLabel}</Text>
-          <Text style={styles.progressPercent}>{safeProgress}%</Text>
-        </View>
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${safeProgress}%`, backgroundColor: t.main }]} />
-        </View>
-
-        <View style={styles.cardFooterRow}>
-          <Text style={[styles.cardActionText, { color: t.main }]}>Open device list</Text>
-          <ArrowRight size={15} color={t.main} strokeWidth={2.8} />
-        </View>
-      </View>
     </TouchableOpacity>
   );
 }
@@ -390,22 +425,33 @@ const styles = StyleSheet.create({
   sectionLabel: { color: c.ink, fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
   sectionCaption: { color: c.soft, fontSize: 11, fontWeight: "700", marginTop: 3 },
   sectionCount: { color: c.purple, fontSize: 16, fontWeight: "900" },
-  endpointCard: {
-    backgroundColor: c.card,
-    borderRadius: 26,
-    padding: 10,
+  endpointCardOuter: {
     marginBottom: 12,
-    flexDirection: "row",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.8)",
+    borderRadius: 28,
     shadowColor: "#7460AE",
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.11,
     shadowRadius: 18,
     elevation: 2,
   },
-  deviceArtwork: { width: 82, minHeight: 104, borderRadius: 22, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  iconGlow: { position: "absolute", width: 58, height: 58, borderRadius: 24 },
+  endpointCard: {
+    borderRadius: 28,
+    padding: 12,
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.9)",
+    overflow: "hidden",
+  },
+  iconColumn: {
+    width: 72,
+    minHeight: 104,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 13,
+    overflow: "hidden",
+  },
+  iconGlow: { position: "absolute", width: 58, height: 58, borderRadius: 24, top: 16, right: -10 },
   iconBadge: {
     width: 46,
     height: 46,
@@ -413,21 +459,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.78)",
   },
-  endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
+  endpointContent: { flex: 1, paddingVertical: 4, paddingRight: 2 },
   endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   endpointTitleWrap: { flex: 1, paddingRight: 10 },
   endpointTitle: { color: c.ink, fontSize: 16, fontWeight: "900", letterSpacing: -0.4 },
   endpointSub: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
-  endpointValue: { fontSize: 28, fontWeight: "900", letterSpacing: -1 },
-  progressMetaRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 16, marginBottom: 6 },
-  progressLabel: { color: c.soft, fontSize: 9.5, fontWeight: "800" },
-  progressPercent: { color: c.muted, fontSize: 9.5, fontWeight: "900" },
-  progressTrack: { height: 7, borderRadius: 99, backgroundColor: "#EEF1F8", overflow: "hidden" },
+  valueBubble: { minWidth: 43, height: 34, borderRadius: 16, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  endpointValue: { fontSize: 22, fontWeight: "900", letterSpacing: -0.8 },
+  statusChipRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 12, marginBottom: 9 },
+  statusChip: { maxWidth: "72%", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+  statusChipText: { fontSize: 9.5, fontWeight: "900" },
+  statusChipNeutral: { backgroundColor: "rgba(255,255,255,0.72)", paddingHorizontal: 9, paddingVertical: 6, borderRadius: 999 },
+  statusChipNeutralText: { color: c.muted, fontSize: 9.5, fontWeight: "900" },
+  progressTrack: { height: 7, borderRadius: 99, backgroundColor: "rgba(226,232,243,0.9)", overflow: "hidden" },
   progressFill: { height: 7, borderRadius: 99 },
-  cardFooterRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10 },
-  cardActionText: { fontSize: 10.5, fontWeight: "900" },
+  cardFooterRow: { flexDirection: "row", alignItems: "center", marginTop: 11 },
+  actionPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999 },
+  actionPillText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
   serviceCard: {
     marginHorizontal: 16,
     marginTop: 4,
