@@ -67,13 +67,7 @@ export default function OverviewHomeScreen() {
   const onlineRate = useMemo(() => pct(snapshot.endpoints.online, snapshot.endpoints.total), [snapshot.endpoints.online, snapshot.endpoints.total]);
   const staleRate = pct(snapshot.endpoints.stale, snapshot.endpoints.total);
   const offlineRate = pct(snapshot.endpoints.offline, snapshot.endpoints.total);
-  const locationCoverage = pct(snapshot.locationTotal, snapshot.endpoints.total);
-  const notLocated = Math.max(snapshot.endpoints.total - snapshot.locationTotal, 0);
-  const slaSafe = Math.max(0, Math.min(snapshot.tickets.slaAchievement || 0, 100));
-  const openTicketRate = pct(snapshot.tickets.open, snapshot.tickets.total);
   const attention = snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded;
-  const healthLabel = onlineRate >= 80 ? "Healthy" : onlineRate >= 50 ? "Watch" : "Critical";
-
   const openEndpointList = (status: "all" | "online" | "offline" | "stale") => navigation.navigate("ActiveDeviceList", { status });
   const openReports = () => navigation.getParent()?.navigate("Reports");
   const refresh = () => reloadSnapshot({ silent: true });
@@ -112,7 +106,7 @@ export default function OverviewHomeScreen() {
               <Text style={styles.heroDate}>{snapshot.generatedAt}</Text>
             </View>
             <Text style={styles.heroTitle}>Command overview</Text>
-            <Text style={styles.heroSubtitle}>Endpoint health, tickets, location coverage and latest reporting in one place.</Text>
+            <Text style={styles.heroSubtitle}>Focus on endpoint health, tickets and location coverage.</Text>
 
             <View style={styles.heroMetricRow}>
               <HeroMetric label="Attention" value={attention} />
@@ -129,84 +123,11 @@ export default function OverviewHomeScreen() {
           </View>
         ) : null}
 
-        <View style={styles.pulsePanel}>
-          <View style={styles.panelTitleRow}>
-            <View>
-              <Text style={styles.panelTitle}>Operations Pulse</Text>
-              <Text style={styles.panelSubtitle}>Live endpoint distribution</Text>
-            </View>
-            <View style={[styles.healthBadge, { backgroundColor: onlineRate >= 80 ? "#E7F8EF" : onlineRate >= 50 ? "#FFF1DB" : "#FFE8EC" }]}> 
-              <Text style={[styles.healthBadgeText, { color: onlineRate >= 80 ? c.green : onlineRate >= 50 ? c.amber : c.red }]}>{healthLabel}</Text>
-            </View>
-          </View>
-
-          <View style={styles.pulseContentRow}>
-            <View style={styles.bigRateBlock}>
-              <Text style={styles.bigRate}>{onlineRate}%</Text>
-              <Text style={styles.bigRateLabel}>Online coverage</Text>
-            </View>
-            <View style={styles.pulseStatsColumn}>
-              <SegmentBar online={onlineRate} offline={offlineRate} stale={staleRate} />
-              <View style={styles.legendRow}>
-                <Legend label="Online" value={snapshot.endpoints.online} color={c.green} />
-                <Legend label="Offline" value={snapshot.endpoints.offline} color={c.red} />
-                <Legend label="Stale" value={snapshot.endpoints.stale} color={c.amber} />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.focusPanel}>
-          <View style={styles.panelTitleRow}>
-            <View>
-              <Text style={styles.panelTitle}>Attention Focus</Text>
-              <Text style={styles.panelSubtitle}>Items that need operator action</Text>
-            </View>
-            <Text style={styles.focusCount}>{formatNumber(attention)}</Text>
-          </View>
-          <FocusRow icon={WifiOff} title="Offline / not reporting" value={snapshot.endpoints.offline} color={c.red} onPress={() => openEndpointList("offline")} />
-          <FocusRow icon={Clock3} title="Stale telemetry" value={snapshot.endpoints.stale} color={c.amber} onPress={() => openEndpointList("stale")} />
-          <FocusRow icon={Ticket} title="SLA exceeded tickets" value={snapshot.tickets.slaExceeded} color={c.purple} onPress={() => navigation.navigate("TicketSummary")} last />
-        </View>
-
-        <View style={styles.dashboardGrid}>
-          <DashboardCard
-            title="Geolocation Coverage"
-            subtitle={`${formatNumber(snapshot.locationTotal)} detected · ${formatNumber(notLocated)} not detected`}
-            value={`${locationCoverage}%`}
-            icon={MapPin}
-            color={c.cyan}
-            onPress={() => navigation.navigate("GeolocationSummary")}
-          />
-          <DashboardCard
-            title="Ticket Workload"
-            subtitle={`${formatNumber(snapshot.tickets.open)} open · ${formatNumber(snapshot.tickets.closed)} closed`}
-            value={`${openTicketRate}%`}
-            icon={Ticket}
-            color={c.purple}
-            onPress={() => navigation.navigate("TicketSummary")}
-          />
-        </View>
-
-        <View style={styles.reportPreviewCard}>
-          <View style={styles.reportIconBox}>
-            <FileText size={21} color="#FFFFFF" strokeWidth={2.8} />
-          </View>
-          <View style={styles.reportTextWrap}>
-            <Text style={styles.reportKicker}>Latest Report</Text>
-            <Text style={styles.reportTitle} numberOfLines={1}>{snapshot.latestReport?.title || "Report center"}</Text>
-            <Text style={styles.reportDesc} numberOfLines={2}>{snapshot.latestReport?.description || "Open the report center to review available operational reports."}</Text>
-          </View>
-          <TouchableOpacity style={styles.reportAction} onPress={openReports} activeOpacity={0.86}>
-            <ArrowRight size={16} color={c.purple} strokeWidth={2.8} />
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.sectionBlock}>
           <View style={styles.sectionTitleRow}>
             <View>
               <Text style={styles.sectionLabel}>Endpoint Fleet</Text>
-              <Text style={styles.sectionCaption}>Tap a card to open filtered device records</Text>
+              <Text style={styles.sectionCaption}>Live device coverage across managed assets</Text>
             </View>
             <Text style={styles.sectionCount}>{formatNumber(snapshot.endpoints.total)}</Text>
           </View>
@@ -215,6 +136,44 @@ export default function OverviewHomeScreen() {
           <EndpointActionCard title="Online Devices" subtitle="Currently reporting" value={snapshot.endpoints.online} progress={onlineRate} progressLabel={`${onlineRate}% online coverage`} toneName="green" icon={Wifi} onPress={() => openEndpointList("online")} />
           <EndpointActionCard title="Offline Devices" subtitle="Not reporting / disconnected" value={snapshot.endpoints.offline} progress={offlineRate} progressLabel={`${offlineRate}% require follow-up`} toneName="red" icon={WifiOff} onPress={() => openEndpointList("offline")} />
           <EndpointActionCard title="Stale Devices" subtitle="Telemetry is outdated" value={snapshot.endpoints.stale} progress={staleRate} progressLabel={`${staleRate}% stale telemetry`} toneName="amber" icon={Clock3} onPress={() => openEndpointList("stale")} />
+        </View>
+
+        <TouchableOpacity style={styles.serviceCard} activeOpacity={0.88} onPress={() => navigation.navigate("TicketSummary")}>
+          <View style={styles.serviceVisual}>
+            <View style={styles.serviceVisualCircle} />
+            <Ticket size={24} color="#FFFFFF" strokeWidth={2.7} />
+          </View>
+          <View style={styles.serviceContent}>
+            <Text style={styles.cardMiniLabel}>Service Desk</Text>
+            <Text style={styles.serviceTitle}>Ticket workload</Text>
+            <View style={styles.ticketInlineRow}>
+              <TicketPill label="Total" value={snapshot.tickets.total} />
+              <TicketPill label="Open" value={snapshot.tickets.open} />
+              <TicketPill label="SLA" value={snapshot.tickets.slaExceeded} danger />
+            </View>
+          </View>
+          <View style={styles.actionBubble}><ArrowRight size={16} color={c.ink} strokeWidth={2.8} /></View>
+        </TouchableOpacity>
+
+        <View style={styles.bottomCards}>
+          <SmallFeatureCard
+            title="Geolocation"
+            subtitle="Detected vs not detected"
+            value={`${formatNumber(snapshot.locationTotal)} devices`}
+            icon="geo"
+            colors={["#B7F4F2", "#FFFFFF"]}
+            accent={c.cyan}
+            onPress={() => navigation.navigate("GeolocationSummary")}
+          />
+          <SmallFeatureCard
+            title="Reports"
+            subtitle={snapshot.latestReport?.title || "Report center"}
+            value="Open report"
+            icon="report"
+            colors={["#E7DEFF", "#FFFFFF"]}
+            accent={c.purple}
+            onPress={openReports}
+          />
         </View>
       </ScrollView>
     </View>
@@ -227,55 +186,6 @@ function HeroMetric({ label, value }: { label: string; value: number }) {
       <Text style={styles.heroMetricValue}>{formatNumber(value)}</Text>
       <Text style={styles.heroMetricLabel}>{label}</Text>
     </View>
-  );
-}
-
-function SegmentBar({ online, offline, stale }: { online: number; offline: number; stale: number }) {
-  const used = Math.min(100, online + offline + stale);
-  const idle = Math.max(0, 100 - used);
-  return (
-    <View style={styles.segmentTrack}>
-      <View style={[styles.segmentFill, { flex: Math.max(online, 1), backgroundColor: c.green }]} />
-      <View style={[styles.segmentFill, { flex: Math.max(offline, 1), backgroundColor: c.red }]} />
-      <View style={[styles.segmentFill, { flex: Math.max(stale, 1), backgroundColor: c.amber }]} />
-      {idle > 0 ? <View style={[styles.segmentFill, { flex: idle, backgroundColor: "#E9EDF5" }]} /> : null}
-    </View>
-  );
-}
-
-function Legend({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={styles.legendItem}>
-      <View style={[styles.legendDot, { backgroundColor: color }]} />
-      <Text style={styles.legendLabel}>{label}</Text>
-      <Text style={styles.legendValue}>{formatNumber(value)}</Text>
-    </View>
-  );
-}
-
-function FocusRow({ icon: Icon, title, value, color, onPress, last }: { icon: any; title: string; value: number; color: string; onPress: () => void; last?: boolean }) {
-  return (
-    <TouchableOpacity style={[styles.focusRow, last && styles.noBorder]} activeOpacity={0.86} onPress={onPress}>
-      <View style={[styles.focusIcon, { backgroundColor: `${color}16` }]}>
-        <Icon size={17} color={color} strokeWidth={2.7} />
-      </View>
-      <Text style={styles.focusTitle}>{title}</Text>
-      <Text style={[styles.focusValue, { color }]}>{formatNumber(value)}</Text>
-      <ArrowRight size={14} color={c.muted} strokeWidth={2.8} />
-    </TouchableOpacity>
-  );
-}
-
-function DashboardCard({ title, subtitle, value, icon: Icon, color, onPress }: { title: string; subtitle: string; value: string; icon: any; color: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.dashboardCard} activeOpacity={0.88} onPress={onPress}>
-      <View style={[styles.dashboardIcon, { backgroundColor: `${color}16` }]}>
-        <Icon size={18} color={color} strokeWidth={2.7} />
-      </View>
-      <Text style={[styles.dashboardValue, { color }]}>{value}</Text>
-      <Text style={styles.dashboardTitle}>{title}</Text>
-      <Text style={styles.dashboardSubtitle} numberOfLines={2}>{subtitle}</Text>
-    </TouchableOpacity>
   );
 }
 
@@ -347,6 +257,49 @@ function EndpointActionCard({
   );
 }
 
+function TicketPill({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <View style={styles.ticketPill}>
+      <Text style={[styles.ticketPillValue, danger && { color: c.red }]}>{formatNumber(value)}</Text>
+      <Text style={styles.ticketPillLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function SmallFeatureCard({
+  title,
+  subtitle,
+  value,
+  icon,
+  colors,
+  accent,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  value: string;
+  icon: "geo" | "report";
+  colors: string[];
+  accent: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.featureCardWrap} activeOpacity={0.88} onPress={onPress}>
+      <LinearGradient colors={colors as any} style={styles.featureCard}>
+        <View style={styles.featureTopRow}>
+          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}> 
+            {icon === "geo" ? <MapPin size={20} color={accent} strokeWidth={2.7} /> : <FileText size={20} color={accent} strokeWidth={2.7} />}
+          </View>
+          <ArrowRight size={15} color={accent} strokeWidth={2.8} />
+        </View>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureSubtitle} numberOfLines={2}>{subtitle}</Text>
+        <Text style={[styles.featureValue, { color: accent }]}>{value}</Text>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: c.bg },
   scroll: { flex: 1 },
@@ -370,44 +323,6 @@ const styles = StyleSheet.create({
   heroMetricLabel: { color: "#C9C8F8", fontSize: 9.5, fontWeight: "800", marginTop: 3 },
   errorCard: { marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
   errorText: { flex: 1, color: c.soft, fontSize: 11, fontWeight: "700" },
-  pulsePanel: { marginHorizontal: 16, marginTop: 16, backgroundColor: c.card, borderRadius: 28, padding: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
-  panelTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  panelTitle: { color: c.ink, fontSize: 17, fontWeight: "900", letterSpacing: -0.35 },
-  panelSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
-  healthBadge: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999 },
-  healthBadgeText: { fontSize: 10, fontWeight: "900" },
-  pulseContentRow: { flexDirection: "row", gap: 14, alignItems: "center" },
-  bigRateBlock: { width: 104, minHeight: 104, borderRadius: 24, backgroundColor: "#F6F7FF", alignItems: "center", justifyContent: "center" },
-  bigRate: { color: c.purple, fontSize: 32, fontWeight: "900", letterSpacing: -1 },
-  bigRateLabel: { color: c.soft, fontSize: 10, fontWeight: "800", marginTop: 4, textAlign: "center" },
-  pulseStatsColumn: { flex: 1 },
-  segmentTrack: { height: 16, borderRadius: 999, backgroundColor: "#E9EDF5", overflow: "hidden", flexDirection: "row" },
-  segmentFill: { height: 16 },
-  legendRow: { marginTop: 12, gap: 8 },
-  legendItem: { flexDirection: "row", alignItems: "center" },
-  legendDot: { width: 8, height: 8, borderRadius: 8, marginRight: 7 },
-  legendLabel: { flex: 1, color: c.soft, fontSize: 10.5, fontWeight: "800" },
-  legendValue: { color: c.ink, fontSize: 11, fontWeight: "900" },
-  focusPanel: { marginHorizontal: 16, marginTop: 14, backgroundColor: c.card, borderRadius: 28, padding: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.09, shadowRadius: 18, elevation: 2 },
-  focusCount: { color: c.red, fontSize: 23, fontWeight: "900", letterSpacing: -0.7 },
-  focusRow: { flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#EEF1F7" },
-  noBorder: { borderBottomWidth: 0 },
-  focusIcon: { width: 36, height: 36, borderRadius: 15, alignItems: "center", justifyContent: "center", marginRight: 11 },
-  focusTitle: { flex: 1, color: c.ink, fontSize: 12.5, fontWeight: "900" },
-  focusValue: { fontSize: 16, fontWeight: "900", marginRight: 9 },
-  dashboardGrid: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 14 },
-  dashboardCard: { flex: 1, backgroundColor: c.card, borderRadius: 26, padding: 14, minHeight: 156, borderWidth: 1, borderColor: "rgba(255,255,255,0.9)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.09, shadowRadius: 18, elevation: 2 },
-  dashboardIcon: { width: 42, height: 42, borderRadius: 17, alignItems: "center", justifyContent: "center", marginBottom: 12 },
-  dashboardValue: { fontSize: 25, fontWeight: "900", letterSpacing: -0.8 },
-  dashboardTitle: { color: c.ink, fontSize: 13, fontWeight: "900", marginTop: 5 },
-  dashboardSubtitle: { color: c.soft, fontSize: 10.2, fontWeight: "700", lineHeight: 14, marginTop: 4 },
-  reportPreviewCard: { marginHorizontal: 16, marginTop: 14, backgroundColor: c.card, borderRadius: 28, padding: 14, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.09, shadowRadius: 18, elevation: 2 },
-  reportIconBox: { width: 52, height: 52, borderRadius: 20, backgroundColor: c.purple, alignItems: "center", justifyContent: "center", marginRight: 12 },
-  reportTextWrap: { flex: 1 },
-  reportKicker: { color: c.purple, fontSize: 9.5, fontWeight: "900", letterSpacing: 0.7 },
-  reportTitle: { color: c.ink, fontSize: 14, fontWeight: "900", marginTop: 3 },
-  reportDesc: { color: c.soft, fontSize: 10.2, fontWeight: "700", lineHeight: 14, marginTop: 4 },
-  reportAction: { width: 36, height: 36, borderRadius: 15, backgroundColor: "#F1EDFF", alignItems: "center", justifyContent: "center", marginLeft: 8 },
   sectionBlock: { paddingHorizontal: 16, marginTop: 16 },
   sectionTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 },
   sectionLabel: { color: c.ink, fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
@@ -432,7 +347,26 @@ const styles = StyleSheet.create({
   statusChipNeutralText: { color: c.muted, fontSize: 9.5, fontWeight: "900" },
   progressTrack: { height: 7, borderRadius: 99, backgroundColor: "#EEF1F8", overflow: "hidden" },
   progressFill: { height: 7, borderRadius: 99 },
-  cardFooterRow: { flexDirection: "row", alignItems: "center", marginTop: 11 },
-  actionPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
-  actionPillText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+  cardFooterRow: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  actionPill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 999, paddingHorizontal: 11, paddingVertical: 7 },
+  actionPillText: { color: "#FFFFFF", fontSize: 10.5, fontWeight: "900" },
+  serviceCard: { marginHorizontal: 16, marginTop: 4, backgroundColor: c.card, borderRadius: 28, padding: 12, flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.85)", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
+  serviceVisual: { width: 82, height: 104, borderRadius: 24, backgroundColor: c.navy, alignItems: "center", justifyContent: "center", marginRight: 13, overflow: "hidden" },
+  serviceVisualCircle: { position: "absolute", width: 76, height: 76, borderRadius: 76, backgroundColor: "rgba(110,73,232,0.48)", top: -18, right: -16 },
+  serviceContent: { flex: 1 },
+  cardMiniLabel: { color: c.purple, fontSize: 10, fontWeight: "900", letterSpacing: 0.7 },
+  serviceTitle: { color: c.ink, fontSize: 17, fontWeight: "900", letterSpacing: -0.4, marginTop: 4 },
+  ticketInlineRow: { flexDirection: "row", gap: 7, marginTop: 12 },
+  ticketPill: { backgroundColor: "#F6F7FB", borderRadius: 14, paddingHorizontal: 9, paddingVertical: 8, minWidth: 54, alignItems: "center" },
+  ticketPillValue: { color: c.ink, fontSize: 16, fontWeight: "900" },
+  ticketPillLabel: { color: c.soft, fontSize: 8.5, fontWeight: "800", marginTop: 2 },
+  actionBubble: { width: 34, height: 34, borderRadius: 14, backgroundColor: "#F3F4FA", alignItems: "center", justifyContent: "center" },
+  bottomCards: { flexDirection: "row", gap: 12, paddingHorizontal: 16, marginTop: 14 },
+  featureCardWrap: { flex: 1, borderRadius: 26, overflow: "hidden", shadowColor: "#7460AE", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.1, shadowRadius: 18, elevation: 2 },
+  featureCard: { minHeight: 158, padding: 14, borderRadius: 26, borderWidth: 1, borderColor: "rgba(255,255,255,0.9)" },
+  featureTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  featureIcon: { width: 44, height: 44, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  featureTitle: { color: c.ink, fontSize: 15, fontWeight: "900", marginTop: 16, letterSpacing: -0.3 },
+  featureSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", lineHeight: 15, marginTop: 5, minHeight: 32 },
+  featureValue: { marginTop: "auto", fontSize: 11, fontWeight: "900" },
 });
