@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
 } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 import LoginScreen from "./src/screens/auth/LoginScreen";
 import TwoFactorScreen from "./src/screens/auth/TwoFactorScreen";
@@ -132,7 +131,7 @@ export default function App() {
   function renderScreen() {
     if (step === "loading") {
       return (
-        <SafeAreaView style={styles.loadingPage}>
+        <SafeAreaView edges={["top", "bottom"]} style={styles.loadingPage}>
           <ActivityIndicator size="large" color={colors.blue} />
           <Text style={styles.loadingText}>Loading OPS Mobile...</Text>
         </SafeAreaView>
