@@ -24,6 +24,8 @@ export default function LiveReportScreen() {
   const { snapshot, loading, error } = useMobileOpsSnapshot();
   const [generating, setGenerating] = useState(false);
   const [pdfPath, setPdfPath] = useState("");
+  const [pdfShared, setPdfShared] = useState(false);
+  const [pdfWarning, setPdfWarning] = useState("");
   const [pdfError, setPdfError] = useState("");
 
   const onlineRate = useMemo(() => {
@@ -40,10 +42,14 @@ export default function LiveReportScreen() {
 
   async function handleGeneratePdf() {
     setPdfError("");
+    setPdfWarning("");
+    setPdfShared(false);
     setGenerating(true);
     try {
-      const uri = await generateAndShareMobileReport(report, snapshot);
-      setPdfPath(uri);
+      const result = await generateAndShareMobileReport(report, snapshot);
+      setPdfPath(result.uri);
+      setPdfShared(result.shared);
+      if (result.shareError) setPdfWarning(result.shareError);
     } catch (err) {
       setPdfError(err instanceof Error ? err.message : String(err || "Failed to generate PDF."));
     } finally {
@@ -115,7 +121,10 @@ export default function LiveReportScreen() {
           <Share2 size={17} color={colors.white} strokeWidth={2.8} />
         </TouchableOpacity>
 
-        {pdfPath ? <Text style={styles.pdfPath}>PDF generated successfully.</Text> : null}
+        {pdfPath ? (
+          <Text style={styles.pdfPath}>{pdfShared ? "PDF generated and shared successfully." : "PDF generated successfully."}</Text>
+        ) : null}
+        {pdfWarning ? <Text style={styles.pdfWarning}>{pdfWarning}</Text> : null}
         {pdfError ? <Text style={styles.pdfError}>{pdfError}</Text> : null}
       </ScrollView>
     </SafeAreaView>
@@ -180,5 +189,6 @@ const styles = StyleSheet.create({
   pdfButton: { minHeight: 52, borderRadius: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 2 },
   pdfButtonText: { color: colors.white, fontSize: 13, fontWeight: "900" },
   pdfPath: { color: colors.green, fontSize: 11, fontWeight: "800", marginTop: 10, textAlign: "center" },
+  pdfWarning: { color: colors.amber, fontSize: 11, fontWeight: "800", marginTop: 8, textAlign: "center" },
   pdfError: { color: colors.red, fontSize: 11, fontWeight: "800", marginTop: 10, textAlign: "center" },
 });
