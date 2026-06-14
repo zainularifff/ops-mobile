@@ -59,6 +59,24 @@ export type MobileDeviceLocation = {
   rawTime: string;
 };
 
+export type MobileEndpointDevice = {
+  id: string;
+  deviceId: string;
+  deviceName: string;
+  branch: string;
+  status: "Online" | "Offline" | "Unknown";
+  isOnline: boolean;
+  isStale: boolean;
+  lastSeen: string;
+  rawLastSeen: string;
+  model: string;
+  platform: string;
+  ipAddress: string;
+  source: string;
+};
+
+export type EndpointDeviceStatusFilter = "all" | "online" | "offline" | "stale";
+
 export type MobileOpsSnapshot = {
   generatedAt: string;
   rangeLabel: string;
@@ -77,6 +95,11 @@ type WorklistFetchOptions = FetchOptions & {
   limit?: number;
 };
 
+type EndpointDeviceFetchOptions = FetchOptions & {
+  limit?: number;
+  status?: EndpointDeviceStatusFilter;
+};
+
 type CacheEntry<T> = {
   expiresAt: number;
   value: T;
@@ -89,9 +112,12 @@ const SUMMARY_CACHE_TTL_MS = 60 * 1000;
 const SNAPSHOT_CACHE_TTL_MS = 45 * 1000;
 const WORKLIST_CACHE_TTL_MS = 30 * 1000;
 const REPORTS_CACHE_TTL_MS = 5 * 60 * 1000;
+const ENDPOINT_DEVICES_CACHE_TTL_MS = 45 * 1000;
 const DEFAULT_WORKLIST_LIMIT = 25;
+const DEFAULT_ENDPOINT_DEVICE_LIMIT = 300;
 const GEOLOCATION_REQUEST_LIMIT = 300;
 const GEOLOCATION_DISPLAY_LIMIT = 30;
+const STALE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 const liveDataCache = new Map<string, CacheEntry<unknown>>();
 const liveDataInFlight = new Map<string, Promise<unknown>>();
@@ -100,10 +126,20 @@ function worklistCacheKey(limit: number) {
   return `worklist-${limit}`;
 }
 
+function endpointDeviceCacheKey(limit: number) {
+  return `endpoint-devices-${limit}`;
+}
+
 function clampWorklistLimit(value?: number) {
   const parsed = Number(value || DEFAULT_WORKLIST_LIMIT);
   if (!Number.isFinite(parsed)) return DEFAULT_WORKLIST_LIMIT;
   return Math.max(1, Math.min(Math.round(parsed), 100));
+}
+
+function clampEndpointDeviceLimit(value?: number) {
+  const parsed = Number(value || DEFAULT_ENDPOINT_DEVICE_LIMIT);
+  if (!Number.isFinite(parsed)) return DEFAULT_ENDPOINT_DEVICE_LIMIT;
+  return Math.max(1, Math.min(Math.round(parsed), 1000));
 }
 
 function getCachedValue<T>(key: string): T | null {
@@ -182,13 +218,18 @@ export function getCachedWorklistItems(limit = DEFAULT_WORKLIST_LIMIT) {
   return getCachedValue<MobileWorkItem[]>(worklistCacheKey(clampWorklistLimit(limit)));
 }
 
+export function getCachedEndpointDevices(limit = DEFAULT_ENDPOINT_DEVICE_LIMIT) {
+  return getCachedValue<MobileEndpointDevice[]>(endpointDeviceCacheKey(clampEndpointDeviceLimit(limit)));
+}
+
 export function getCachedReportCatalog() {
   return getCachedValue<MobileReportItem[]>(REPORTS_CACHE_KEY);
 }
 
 function cleanText(value: unknown, fallback = "-") {
   const text = String(value ?? "").trim();
-  return text || fallback;
+  if (!text || text.toLowerCase() === "null" || text.toLowerCase() === "undefined") return fallback;
+  return text;
 }
 
 function asNumber(value: unknown, fallback = 0) {
@@ -245,6 +286,12 @@ function getDateSortValue(value: unknown) {
   const date = new Date(raw);
   const time = date.getTime();
   return Number.isNaN(time) ? 0 : time;
+}
+
+function isStaleTimestamp(value: unknown) {
+  const time = getDateSortValue(value);
+  if (!time) return false;
+  return Date.now() - time > STALE_THRESHOLD_MS;
 }
 
 function getRows(payload: any): any[] {
@@ -330,6 +377,56 @@ function mapLatestDeviceLocations(rows: any[]): { locations: MobileDeviceLocatio
     locations: locations.slice(0, GEOLOCATION_DISPLAY_LIMIT),
     total: locations.length,
   };
+}
+
+function isOnlineStatus(value: unknown) {
+  const text = cleanText(value, "").toLowerCase();
+  return text === "1" || text === "online" || text === "true" || text === "connected";
+}
+
+function getEndpointDeviceId(row: any, index: number) {
+  return cleanText(
+    row?._Idn || row?.id || row?.assetId || row?.Object_DeviceID || row?.DeviceID || row?.ComputerName || row?.DeviceName,
+    `endpoint-${index + 1}`
+  );
+}
+
+function getEndpointDeviceName(row: any, fallback: string) {
+  return cleanText(row?.ComputerName || row?.DeviceName || row?.Object_DeviceID || row?.DeviceID || row?.name || row?.assetTag, fallback);
+}
+
+function getEndpointRawLastSeen(row: any) {
+  return cleanText(row?.ConnectionTime || row?.DeviceTimeStamp || row?.LastSeenAt || row?.UpdatedAt || row?.CreatedAt, "");
+}
+
+function mapEndpointDevice(row: any, index: number): MobileEndpointDevice {
+  const deviceId = getEndpointDeviceId(row, index);
+  const rawLastSeen = getEndpointRawLastSeen(row);
+  const isOnline = isOnlineStatus(row?.ConnectionStatus || row?.status || row?.StatusLabel);
+  const isStale = isStaleTimestamp(rawLastSeen);
+
+  return {
+    id: uniqueKey(`${row?.Object_Agent || row?.source || "endpoint"}-${deviceId}`, index, "endpoint"),
+    deviceId,
+    deviceName: getEndpointDeviceName(row, deviceId),
+    branch: cleanText(row?.Object_Full_Name || row?.Object_Rel_Name || row?.department || row?.requesterName),
+    status: isOnline ? "Online" : cleanText(row?.ConnectionStatus || row?.status || row?.StatusLabel, "Unknown") === "Unknown" ? "Unknown" : "Offline",
+    isOnline,
+    isStale,
+    lastSeen: formatDateTime(rawLastSeen),
+    rawLastSeen,
+    model: cleanText(row?.Model || row?.DeviceModelName || row?.model),
+    platform: cleanText(row?.PlatformType || row?.OS || row?.os || row?.deviceType),
+    ipAddress: cleanText(row?.IP || row?.ipAddress || row?.DeviceIPAddress || row?.DeviceLocalIPAddress),
+    source: cleanText(row?.Object_Agent || row?.source),
+  };
+}
+
+function filterEndpointDevices(devices: MobileEndpointDevice[], status: EndpointDeviceStatusFilter) {
+  if (status === "online") return devices.filter((item) => item.isOnline);
+  if (status === "offline") return devices.filter((item) => !item.isOnline);
+  if (status === "stale") return devices.filter((item) => item.isStale);
+  return devices;
 }
 
 function mapTaskType(task: any): MobileWorkItem["type"] {
@@ -444,6 +541,28 @@ export async function fetchWorklistItems(
     () => requestWorklistItems(limit),
     options
   );
+}
+
+async function requestEndpointDevices(limit: number): Promise<MobileEndpointDevice[]> {
+  const response: any = await apiRequest(`/api/hardware-inventory/assets?limit=${limit}`);
+  return getRows(response)
+    .map((row, index) => mapEndpointDevice(row, index))
+    .sort((a, b) => getDateSortValue(b.rawLastSeen) - getDateSortValue(a.rawLastSeen));
+}
+
+export async function fetchEndpointDevices(
+  options: EndpointDeviceFetchOptions = {}
+): Promise<MobileEndpointDevice[]> {
+  const limit = clampEndpointDeviceLimit(options.limit);
+  const status = options.status || "all";
+  const devices = await fetchWithCache(
+    endpointDeviceCacheKey(limit),
+    ENDPOINT_DEVICES_CACHE_TTL_MS,
+    () => requestEndpointDevices(limit),
+    options
+  );
+
+  return filterEndpointDevices(devices, status);
 }
 
 async function requestReportCatalog(): Promise<MobileReportItem[]> {
