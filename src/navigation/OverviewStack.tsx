@@ -1,7 +1,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import OverviewScreen from "../screens/overview/OverviewScreen";
+import OverviewHomeScreen from "../screens/overview/OverviewHomeScreen";
 
 import EndpointSummaryScreen from "../screens/endpoint/EndpointSummaryScreen";
 import ActiveDeviceCoverageScreen from "../screens/endpoint/ActiveDeviceCoverageScreen";
@@ -26,43 +26,17 @@ export default function OverviewStack() {
         headerShown: false,
       }}
     >
-      <Stack.Screen name="OverviewHome" component={OverviewScreen} />
-
+      <Stack.Screen name="OverviewHome" component={OverviewHomeScreen} />
       <Stack.Screen name="EndpointSummary" component={EndpointSummaryScreen} />
-
-      <Stack.Screen
-        name="ActiveDeviceCoverage"
-        component={ActiveDeviceCoverageScreen}
-      />
-
-      <Stack.Screen
-        name="ActiveDeviceList"
-        component={ActiveDeviceListScreen}
-      />
-
+      <Stack.Screen name="ActiveDeviceCoverage" component={ActiveDeviceCoverageScreen} />
+      <Stack.Screen name="ActiveDeviceList" component={ActiveDeviceListScreen} />
       <Stack.Screen name="TicketSummary" component={TicketSummaryScreen} />
-
-      <Stack.Screen
-        name="TicketWorkloadList"
-        component={TicketWorkloadListScreen}
-      />
-
+      <Stack.Screen name="TicketWorkloadList" component={TicketWorkloadListScreen} />
       <Stack.Screen name="TicketQuickView" component={TicketQuickViewScreen} />
-
       <Stack.Screen name="RiskSummary" component={RiskSummaryScreen} />
-
       <Stack.Screen name="ExceptionDetail" component={ExceptionDetailScreen} />
-
-      <Stack.Screen
-        name="EndpointIssueList"
-        component={EndpointIssueListScreen}
-      />
-
-      <Stack.Screen
-        name="SiteEndpointSummary"
-        component={SiteEndpointSummaryScreen}
-      />
-
+      <Stack.Screen name="EndpointIssueList" component={EndpointIssueListScreen} />
+      <Stack.Screen name="SiteEndpointSummary" component={SiteEndpointSummaryScreen} />
       <Stack.Screen name="DeviceQuickView" component={DeviceQuickViewScreen} />
     </Stack.Navigator>
   );
