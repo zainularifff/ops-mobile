@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,73 +21,73 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
+import { useOperationsSummary } from "../../hooks/useLiveOpsData";
 import { colors } from "../../theme/colors";
-import { dashboardSummary } from "../../data/mockDashboard";
 import { formatNumber } from "../../utils/formatters";
-
-const connectionWindows = [
-  {
-    label: "Today",
-    value: 1840,
-    desc: "Reported within current day",
-    tone: "green" as const,
-  },
-  {
-    label: "Last 7 Days",
-    value: 2377,
-    desc: "Recently active devices",
-    tone: "blue" as const,
-  },
-  {
-    label: "> 7 Days",
-    value: 317,
-    desc: "Stale reporting window",
-    tone: "amber" as const,
-  },
-  {
-    label: "Offline",
-    value: 358,
-    desc: "Not reporting / disconnected",
-    tone: "red" as const,
-  },
-];
-
-const activeSiteCoverage = [
-  {
-    site: "Kuala Lumpur HQ",
-    active: 1126,
-    total: 1280,
-    coverage: "88%",
-  },
-  {
-    site: "Putrajaya",
-    active: 882,
-    total: 980,
-    coverage: "90%",
-  },
-  {
-    site: "Shah Alam",
-    active: 651,
-    total: 740,
-    coverage: "88%",
-  },
-  {
-    site: "Johor Bahru",
-    active: 548,
-    total: 610,
-    coverage: "90%",
-  },
-];
 
 export default function ActiveDeviceCoverageScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
+  const { summary, loading, refreshing, error, reloadSummary } =
+    useOperationsSummary();
+
+  const notReporting = Math.max(
+    summary.offlineDevices || summary.totalEndpoints - summary.activeDevices,
+    0
+  );
+
+  const activeCoverage = useMemo(() => {
+    if (!summary.totalEndpoints) return 0;
+    return Math.round((summary.activeDevices / summary.totalEndpoints) * 100);
+  }, [summary.activeDevices, summary.totalEndpoints]);
+
+  const connectionWindows = useMemo(
+    () => [
+      {
+        label: "Active / Recent",
+        value: summary.activeDevices,
+        desc: "Devices currently reporting from live dashboard data",
+        tone: "green" as const,
+      },
+      {
+        label: "Managed Scope",
+        value: summary.totalEndpoints,
+        desc: "Total endpoints under monitoring scope",
+        tone: "blue" as const,
+      },
+      {
+        label: "> 7 Days",
+        value: 0,
+        desc: "Stale window is not returned by mobile summary API yet",
+        tone: "amber" as const,
+      },
+      {
+        label: "Offline",
+        value: notReporting,
+        desc: "Not reporting / disconnected devices",
+        tone: "red" as const,
+      },
+    ],
+    [notReporting, summary.activeDevices, summary.totalEndpoints]
+  );
+
+  const activeSiteCoverage = useMemo(
+    () => [
+      {
+        site: "All Branches",
+        active: summary.activeDevices,
+        total: summary.totalEndpoints,
+        coverage: `${activeCoverage}%`,
+      },
+    ],
+    [activeCoverage, summary.activeDevices, summary.totalEndpoints]
+  );
 
   function openActiveList(filter: "today" | "last7" | "site", site?: string) {
     if (filter === "today") {
       navigation.navigate("ActiveDeviceList", {
-        title: "Active Today",
-        subtitle: "Devices reporting within the current day.",
+        title: "Active Devices",
+        subtitle: "Devices currently reporting from live dashboard data.",
         filter: "today",
       });
       return;
@@ -93,8 +95,8 @@ export default function ActiveDeviceCoverageScreen() {
 
     if (filter === "last7") {
       navigation.navigate("ActiveDeviceList", {
-        title: "Recently Active Devices",
-        subtitle: "Devices that reported within the last 7 days.",
+        title: "Managed Devices",
+        subtitle: "Managed endpoint scope from live dashboard data.",
         filter: "last7",
       });
       return;
@@ -102,19 +104,19 @@ export default function ActiveDeviceCoverageScreen() {
 
     navigation.navigate("ActiveDeviceList", {
       title: `${site} Active Devices`,
-      subtitle: "Selected active device preview by site.",
+      subtitle: "Selected active device preview by branch.",
       filter: "site",
       site,
     });
   }
 
   function handleWindowPress(label: string) {
-    if (label === "Today") {
+    if (label === "Active / Recent") {
       openActiveList("today");
       return;
     }
 
-    if (label === "Last 7 Days") {
+    if (label === "Managed Scope") {
       openActiveList("last7");
       return;
     }
@@ -127,6 +129,10 @@ export default function ActiveDeviceCoverageScreen() {
     navigation.navigate("EndpointIssueList", { type: "offline" });
   }
 
+  function handleRefresh() {
+    reloadSummary({ silent: true });
+  }
+
   return (
     <ScrollView
       style={styles.page}
@@ -135,6 +141,9 @@ export default function ActiveDeviceCoverageScreen() {
         { paddingTop: insets.top + 24 },
       ]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
     >
       <TouchableOpacity
         style={styles.backButton}
@@ -153,6 +162,20 @@ export default function ActiveDeviceCoverageScreen() {
         </Text>
       </View>
 
+      {loading ? <ActivityIndicator size="small" color={colors.green} /> : null}
+
+      {error ? (
+        <View style={styles.notePanel}>
+          <View style={styles.noteIcon}>
+            <WifiOff size={18} color={colors.red} strokeWidth={2.7} />
+          </View>
+          <View style={styles.noteTextWrap}>
+            <Text style={[styles.noteTitle, { color: colors.red }]}>Live data unavailable</Text>
+            <Text style={styles.noteText}>{error}</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.heroCard}>
         <View style={styles.heroGlowOne} />
         <View style={styles.heroGlowTwo} />
@@ -168,21 +191,21 @@ export default function ActiveDeviceCoverageScreen() {
             </View>
 
             <View style={styles.heroStatus}>
-              <Text style={styles.heroStatusText}>REPORTING HEALTH</Text>
+              <Text style={styles.heroStatusText}>LIVE HEALTH</Text>
             </View>
           </View>
 
           <Text style={styles.heroTitle}>Active Reporting Status</Text>
 
           <Text style={styles.heroDesc}>
-            This drilldown focuses on devices currently reporting, recently
-            active devices, stale endpoints and offline coverage.
+            This drilldown focuses on live dashboard counts for managed, active
+            and offline endpoint coverage.
           </Text>
 
           <View style={styles.heroMetricRow}>
             <View style={styles.heroMetric}>
               <Text style={styles.heroMetricValue}>
-                {formatNumber(dashboardSummary.activeDevices)}
+                {formatNumber(summary.activeDevices)}
               </Text>
               <Text style={styles.heroMetricLabel}>Active Devices</Text>
             </View>
@@ -190,7 +213,7 @@ export default function ActiveDeviceCoverageScreen() {
             <View style={styles.heroDivider} />
 
             <View style={styles.heroMetric}>
-              <Text style={styles.heroMetricValue}>86%</Text>
+              <Text style={styles.heroMetricValue}>{activeCoverage}%</Text>
               <Text style={styles.heroMetricLabel}>Active Coverage</Text>
             </View>
           </View>
@@ -252,9 +275,9 @@ export default function ActiveDeviceCoverageScreen() {
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Active Coverage by Site</Text>
+        <Text style={styles.sectionTitle}>Active Coverage by Branch</Text>
         <Text style={styles.sectionDesc}>
-          Selected Malaysian site coverage for quick mobile review
+          Branch coverage summary based on available mobile API fields
         </Text>
       </View>
 
@@ -305,14 +328,8 @@ export default function ActiveDeviceCoverageScreen() {
 }
 
 const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    paddingHorizontal: 18,
-    paddingBottom: 110,
-  },
+  page: { flex: 1, backgroundColor: colors.background },
+  container: { paddingHorizontal: 18, paddingBottom: 110 },
   backButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -325,282 +342,49 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     marginBottom: 16,
   },
-  backText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: "900",
-    marginLeft: 6,
-  },
-  header: {
-    marginBottom: 16,
-  },
-  eyebrow: {
-    color: colors.green,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 1.2,
-    marginBottom: 4,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 25,
-    fontWeight: "900",
-    letterSpacing: -0.8,
-  },
-  subtitle: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 4,
-    lineHeight: 18,
-  },
-
-  heroCard: {
-    backgroundColor: colors.navy,
-    borderRadius: 28,
-    padding: 20,
-    marginBottom: 18,
-    overflow: "hidden",
-  },
-  heroContent: {
-    position: "relative",
-    zIndex: 2,
-  },
-  heroGlowOne: {
-    position: "absolute",
-    width: 180,
-    height: 180,
-    borderRadius: 180,
-    backgroundColor: "rgba(31,157,101,0.28)",
-    top: -70,
-    right: -60,
-  },
-  heroGlowTwo: {
-    position: "absolute",
-    width: 150,
-    height: 150,
-    borderRadius: 150,
-    backgroundColor: "rgba(47,98,216,0.22)",
-    bottom: -70,
-    left: -50,
-  },
-  heroTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  heroIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 18,
-    backgroundColor: colors.green,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroStatus: {
-    backgroundColor: "rgba(255,255,255,0.12)",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.14)",
-  },
-  heroStatusText: {
-    color: colors.white,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 0.4,
-  },
-  heroTitle: {
-    color: colors.white,
-    fontSize: 22,
-    fontWeight: "900",
-    marginTop: 18,
-  },
-  heroDesc: {
-    color: "#AFC0D6",
-    fontSize: 12,
-    fontWeight: "600",
-    lineHeight: 18,
-    marginTop: 7,
-  },
-  heroMetricRow: {
-    marginTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.12)",
-    paddingTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  heroMetric: {
-    flex: 1,
-  },
-  heroMetricValue: {
-    color: colors.white,
-    fontSize: 25,
-    fontWeight: "900",
-  },
-  heroMetricLabel: {
-    color: "#8FA3BC",
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  heroDivider: {
-    width: 1,
-    height: 38,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    marginHorizontal: 16,
-  },
-
-  sectionHeader: {
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 17,
-    fontWeight: "900",
-  },
-  sectionDesc: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-
-  windowPanel: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    marginBottom: 18,
-  },
-  windowRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  rowLast: {
-    borderBottomWidth: 0,
-  },
-  windowIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-  windowTextWrap: {
-    flex: 1,
-  },
-  windowTitle: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  windowDesc: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-  windowRight: {
-    alignItems: "flex-end",
-    gap: 6,
-  },
-  windowValue: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: "900",
-  },
-
-  sitePanel: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    marginBottom: 18,
-  },
-  siteRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  siteIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: "#EAF1FF",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 11,
-  },
-  siteTextWrap: {
-    flex: 1,
-  },
-  siteTitle: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  siteMeta: {
-    color: colors.textSoft,
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-  coverageBadge: {
-    backgroundColor: "#EBF8F1",
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  coverageText: {
-    color: colors.green,
-    fontSize: 11,
-    fontWeight: "900",
-  },
-
-  notePanel: {
-    backgroundColor: colors.white,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    flexDirection: "row",
-  },
-  noteIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 15,
-    backgroundColor: "#E9F7FB",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  noteTextWrap: {
-    flex: 1,
-  },
-  noteTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  noteText: {
-    color: colors.textSoft,
-    fontSize: 12,
-    fontWeight: "700",
-    lineHeight: 18,
-    marginTop: 5,
-  },
+  backText: { color: colors.text, fontSize: 12, fontWeight: "900", marginLeft: 6 },
+  header: { marginBottom: 16 },
+  eyebrow: { color: colors.green, fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginBottom: 4 },
+  title: { color: colors.text, fontSize: 25, fontWeight: "900", letterSpacing: -0.8 },
+  subtitle: { color: colors.textSoft, fontSize: 12, fontWeight: "700", marginTop: 4, lineHeight: 18 },
+  heroCard: { backgroundColor: colors.navy, borderRadius: 28, padding: 20, marginBottom: 18, overflow: "hidden" },
+  heroContent: { position: "relative", zIndex: 2 },
+  heroGlowOne: { position: "absolute", width: 180, height: 180, borderRadius: 180, backgroundColor: "rgba(31,157,101,0.28)", top: -70, right: -60 },
+  heroGlowTwo: { position: "absolute", width: 150, height: 150, borderRadius: 150, backgroundColor: "rgba(47,98,216,0.22)", bottom: -70, left: -50 },
+  heroTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroIcon: { width: 50, height: 50, borderRadius: 18, backgroundColor: colors.green, alignItems: "center", justifyContent: "center" },
+  heroStatus: { backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" },
+  heroStatusText: { color: colors.white, fontSize: 10, fontWeight: "900", letterSpacing: 0.4 },
+  heroTitle: { color: colors.white, fontSize: 22, fontWeight: "900", marginTop: 18 },
+  heroDesc: { color: "#AFC0D6", fontSize: 12, fontWeight: "600", lineHeight: 18, marginTop: 7 },
+  heroMetricRow: { marginTop: 20, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.12)", paddingTop: 16, flexDirection: "row", alignItems: "center" },
+  heroMetric: { flex: 1 },
+  heroMetricValue: { color: colors.white, fontSize: 25, fontWeight: "900" },
+  heroMetricLabel: { color: "#8FA3BC", fontSize: 11, fontWeight: "700", marginTop: 4 },
+  heroDivider: { width: 1, height: 38, backgroundColor: "rgba(255,255,255,0.14)", marginHorizontal: 16 },
+  sectionHeader: { marginBottom: 12 },
+  sectionTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
+  sectionDesc: { color: colors.textSoft, fontSize: 11, fontWeight: "700", marginTop: 3 },
+  windowPanel: { backgroundColor: colors.white, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 4, marginBottom: 18 },
+  windowRow: { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  rowLast: { borderBottomWidth: 0 },
+  windowIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", marginRight: 11 },
+  windowTextWrap: { flex: 1 },
+  windowTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  windowDesc: { color: colors.textSoft, fontSize: 11, fontWeight: "700", marginTop: 3 },
+  windowRight: { alignItems: "flex-end", gap: 6 },
+  windowValue: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  sitePanel: { backgroundColor: colors.white, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, paddingVertical: 4, marginBottom: 18 },
+  siteRow: { flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.border },
+  siteIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#EAF1FF", alignItems: "center", justifyContent: "center", marginRight: 11 },
+  siteTextWrap: { flex: 1 },
+  siteTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  siteMeta: { color: colors.textSoft, fontSize: 11, fontWeight: "700", marginTop: 3 },
+  coverageBadge: { backgroundColor: "#EBF8F1", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  coverageText: { color: colors.green, fontSize: 11, fontWeight: "900" },
+  notePanel: { backgroundColor: colors.white, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: colors.border, flexDirection: "row", marginBottom: 12 },
+  noteIcon: { width: 42, height: 42, borderRadius: 15, backgroundColor: "#E9F7FB", alignItems: "center", justifyContent: "center", marginRight: 12 },
+  noteTextWrap: { flex: 1 },
+  noteTitle: { color: colors.text, fontSize: 14, fontWeight: "900" },
+  noteText: { color: colors.textSoft, fontSize: 12, fontWeight: "700", lineHeight: 18, marginTop: 5 },
 });
