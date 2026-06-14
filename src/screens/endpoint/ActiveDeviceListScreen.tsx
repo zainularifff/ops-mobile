@@ -36,35 +36,32 @@ import { formatNumber } from "../../utils/formatters";
 const PAGE_SIZE = 10;
 const DEVICE_FETCH_LIMIT = 500;
 
-const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string }> = {
+const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string; scopeLabel: string }> = {
   all: {
     title: "Managed Endpoints",
-    subtitle: "Live endpoint list from hardware inventory.",
+    subtitle: "All live endpoint records from hardware inventory.",
     tone: colors.blue,
+    scopeLabel: "All inventory devices",
   },
   online: {
     title: "Online Devices",
-    subtitle: "Live records currently reporting as online.",
+    subtitle: "Devices currently reporting as online.",
     tone: colors.green,
+    scopeLabel: "Online records only",
   },
   offline: {
     title: "Offline Devices",
-    subtitle: "Live records currently not reporting or disconnected.",
+    subtitle: "Devices currently not reporting or disconnected.",
     tone: colors.red,
+    scopeLabel: "Offline records only",
   },
   stale: {
     title: "Stale Devices",
-    subtitle: "Live records with outdated telemetry.",
+    subtitle: "Devices with outdated telemetry.",
     tone: colors.amber,
+    scopeLabel: "Stale records only",
   },
 };
-
-const filterOptions: { key: EndpointDeviceStatusFilter; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "online", label: "Online" },
-  { key: "offline", label: "Offline" },
-  { key: "stale", label: "Stale" },
-];
 
 function resolveFilter(value: unknown): EndpointDeviceStatusFilter {
   const text = String(value || "all").toLowerCase();
@@ -75,7 +72,7 @@ function resolveFilter(value: unknown): EndpointDeviceStatusFilter {
 }
 
 function matchesStatus(record: MobileEndpointDevice, filter: EndpointDeviceStatusFilter) {
-  if (filter === "online") return record.isOnline;
+  if (filter === "online") return record.isOnline && !record.isStale;
   if (filter === "offline") return !record.isOnline;
   if (filter === "stale") return record.isStale;
   return true;
@@ -104,34 +101,23 @@ export default function ActiveDeviceListScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
-  const initialFilter = resolveFilter(route.params?.status || route.params?.filter);
+  const activeFilter = resolveFilter(route.params?.status || route.params?.filter);
+  const config = titleMap[activeFilter];
 
   const [records, setRecords] = useState<MobileEndpointDevice[]>([]);
-  const [activeFilter, setActiveFilter] = useState<EndpointDeviceStatusFilter>(initialFilter);
   const [searchText, setSearchText] = useState("");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const config = titleMap[activeFilter];
-
-  const endpointStats = useMemo(() => {
-    const online = records.filter((record) => record.isOnline).length;
-    const stale = records.filter((record) => record.isStale).length;
-    const offline = records.filter((record) => !record.isOnline).length;
-
-    return {
-      total: records.length,
-      online,
-      offline,
-      stale,
-    };
-  }, [records]);
+  const scopedRecords = useMemo(() => {
+    return records.filter((record) => matchesStatus(record, activeFilter));
+  }, [activeFilter, records]);
 
   const filteredRecords = useMemo(() => {
-    return records.filter((record) => matchesStatus(record, activeFilter) && matchesSearch(record, searchText));
-  }, [activeFilter, records, searchText]);
+    return scopedRecords.filter((record) => matchesSearch(record, searchText));
+  }, [scopedRecords, searchText]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -183,10 +169,6 @@ export default function ActiveDeviceListScreen() {
     });
   }
 
-  function changeFilter(nextFilter: EndpointDeviceStatusFilter) {
-    setActiveFilter(nextFilter);
-  }
-
   function goPrevious() {
     setPage((current) => Math.max(1, current - 1));
   }
@@ -229,16 +211,10 @@ export default function ActiveDeviceListScreen() {
           <MonitorCog size={24} color={config.tone} strokeWidth={2.8} />
         </View>
         <View style={styles.summaryTextWrap}>
-          <Text style={styles.summaryLabel}>Live device records</Text>
-          <Text style={styles.summaryValue}>{formatNumber(endpointStats.total)}</Text>
-          <Text style={styles.summaryHint}>Filtered from {formatNumber(endpointStats.total)} hardware inventory assets</Text>
+          <Text style={styles.summaryLabel}>{config.scopeLabel}</Text>
+          <Text style={styles.summaryValue}>{formatNumber(scopedRecords.length)}</Text>
+          <Text style={styles.summaryHint}>From {formatNumber(records.length)} hardware inventory assets</Text>
         </View>
-      </View>
-
-      <View style={styles.kpiRow}>
-        <MiniStatusCard label="Online" value={endpointStats.online} color={colors.green} />
-        <MiniStatusCard label="Offline" value={endpointStats.offline} color={colors.red} />
-        <MiniStatusCard label="Stale" value={endpointStats.stale} color={colors.amber} />
       </View>
 
       <View style={styles.filterPanel}>
@@ -258,22 +234,6 @@ export default function ActiveDeviceListScreen() {
               <Text style={styles.clearSearch}>Clear</Text>
             </TouchableOpacity>
           ) : null}
-        </View>
-
-        <View style={styles.filterChipRow}>
-          {filterOptions.map((item) => {
-            const selected = item.key === activeFilter;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                style={[styles.filterChip, selected && { backgroundColor: titleMap[item.key].tone, borderColor: titleMap[item.key].tone }]}
-                activeOpacity={0.82}
-                onPress={() => changeFilter(item.key)}
-              >
-                <Text style={[styles.filterChipText, selected && styles.filterChipTextActive]}>{item.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
         </View>
       </View>
 
@@ -297,7 +257,7 @@ export default function ActiveDeviceListScreen() {
           <View style={styles.emptyBlock}>
             <MonitorCog size={22} color={colors.muted} strokeWidth={2.7} />
             <Text style={styles.emptyTitle}>No device records found</Text>
-            <Text style={styles.emptyText}>No live endpoint matched this filter.</Text>
+            <Text style={styles.emptyText}>No live endpoint matched this selected category.</Text>
           </View>
         ) : (
           visibleRecords.map((record, index) => (
@@ -370,15 +330,6 @@ export default function ActiveDeviceListScreen() {
   );
 }
 
-function MiniStatusCard({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={styles.miniStatusCard}>
-      <Text style={[styles.miniStatusValue, { color }]}>{formatNumber(value)}</Text>
-      <Text style={styles.miniStatusLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   container: { paddingHorizontal: 18, paddingBottom: 116 },
@@ -396,18 +347,10 @@ const styles = StyleSheet.create({
   summaryLabel: { color: colors.textSoft, fontSize: 11, fontWeight: "900" },
   summaryValue: { color: colors.text, fontSize: 30, fontWeight: "900", letterSpacing: -1, marginTop: 3 },
   summaryHint: { color: colors.textSoft, fontSize: 10.5, fontWeight: "700", marginTop: 4 },
-  kpiRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  miniStatusCard: { flex: 1, backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 1 },
-  miniStatusValue: { fontSize: 21, fontWeight: "900", letterSpacing: -0.5 },
-  miniStatusLabel: { color: colors.textSoft, fontSize: 10.5, fontWeight: "800", marginTop: 3 },
   filterPanel: { backgroundColor: colors.white, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 1 },
   searchBox: { minHeight: 44, borderRadius: 16, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8 },
   searchInput: { flex: 1, color: colors.text, fontSize: 12.5, fontWeight: "700", paddingVertical: 8 },
   clearSearch: { color: colors.blue, fontSize: 11, fontWeight: "900" },
-  filterChipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  filterChip: { paddingHorizontal: 13, paddingVertical: 8, borderRadius: 999, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.border },
-  filterChipText: { color: colors.textSoft, fontSize: 11, fontWeight: "900" },
-  filterChipTextActive: { color: colors.white },
   listPanel: { backgroundColor: colors.white, borderRadius: 24, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 14, shadowColor: colors.navy, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
   listToolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#EDF2F8" },
   listTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
