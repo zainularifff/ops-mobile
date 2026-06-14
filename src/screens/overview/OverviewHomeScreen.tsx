@@ -3,7 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { AlertTriangle, ArrowRight, CheckCircle2, FileText, MapPin, RefreshCcw, Server, ShieldCheck, Ticket, WifiOff } from "lucide-react-native";
+import { AlertTriangle, ArrowRight, CheckCircle2, FileText, MapPin, RefreshCcw, Server, Ticket, WifiOff } from "lucide-react-native";
 
 import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
@@ -52,7 +52,7 @@ export default function OverviewHomeScreen() {
         <LinearGradient colors={[c.navy, c.navy2, "#15325F"]} style={styles.hero}>
           <View style={styles.orb} />
           <View style={styles.heroTop}>
-            <View>
+            <View style={styles.heroCopy}>
               <Text style={styles.eyebrow}>IT OPERATOR</Text>
               <Text style={styles.title}>Command Center</Text>
               <Text style={styles.meta}>Live data · {snapshot.generatedAt}</Text>
@@ -81,11 +81,6 @@ export default function OverviewHomeScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
-
-        <View style={styles.quickRow}>
-          <QuickCard title="Operator" subtitle="Device and location" icon={ShieldCheck} color={c.blue} onPress={() => openTab("Operator")} />
-          <QuickCard title="Reports" subtitle="Report center" icon={FileText} color={c.purple} onPress={() => openTab("Reports")} />
-        </View>
 
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Endpoint Fleet</Text>
@@ -121,10 +116,6 @@ export default function OverviewHomeScreen() {
   );
 }
 
-function QuickCard({ title, subtitle, icon: Icon, color, onPress }: any) {
-  return <TouchableOpacity style={styles.quickCard} onPress={onPress} activeOpacity={0.86}><View style={[styles.quickIcon, { backgroundColor: `${color}18` }]}><Icon size={18} color={color} strokeWidth={2.8} /></View><Text style={styles.quickTitle}>{title}</Text><Text style={styles.quickSub}>{subtitle}</Text></TouchableOpacity>;
-}
-
 function MetricCard({ title, caption, value, color, icon: Icon, onPress }: any) {
   return <TouchableOpacity style={styles.metricCard} onPress={onPress} activeOpacity={0.86}><View style={styles.metricTop}><View style={[styles.metricIcon, { backgroundColor: `${color}16` }]}><Icon size={18} color={color} strokeWidth={2.8} /></View><ArrowRight size={15} color={c.muted} strokeWidth={2.8} /></View><Text style={styles.metricValue}>{formatNumber(value)}</Text><Text style={styles.metricTitle}>{title}</Text><Text style={styles.metricCaption}>{caption}</Text></TouchableOpacity>;
 }
@@ -140,9 +131,10 @@ function InfoCard({ title, text, value, icon: Icon, color, onPress }: any) {
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: c.bg },
   scroll: { flex: 1 },
-  hero: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 28, borderBottomLeftRadius: 34, borderBottomRightRadius: 34, overflow: "hidden" },
+  hero: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 34, borderBottomLeftRadius: 34, borderBottomRightRadius: 34, overflow: "hidden" },
   orb: { position: "absolute", width: 220, height: 220, borderRadius: 220, backgroundColor: "rgba(47,98,216,0.42)", top: -112, right: -82 },
   heroTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  heroCopy: { flex: 1, paddingRight: 14 },
   eyebrow: { color: "#9DC2FF", fontSize: 11, fontWeight: "900", letterSpacing: 1.3 },
   title: { color: "#FFFFFF", fontSize: 30, fontWeight: "900", letterSpacing: -1.2, marginTop: 6 },
   meta: { color: "#B5C7DE", fontSize: 11, fontWeight: "700", marginTop: 8 },
@@ -155,12 +147,7 @@ const styles = StyleSheet.create({
   onlinePillText: { color: "#B7F7DD", fontSize: 11, fontWeight: "900" },
   errorCard: { marginHorizontal: 16, marginTop: 14, padding: 14, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
   errorText: { flex: 1, color: c.soft, fontSize: 11, fontWeight: "700" },
-  quickRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginTop: -16 },
-  quickCard: { flex: 1, backgroundColor: c.card, borderRadius: 20, padding: 13, borderWidth: 1, borderColor: c.line, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.08, shadowRadius: 16, elevation: 2 },
-  quickIcon: { width: 36, height: 36, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 10 },
-  quickTitle: { color: c.ink, fontSize: 13, fontWeight: "900" },
-  quickSub: { color: c.soft, fontSize: 10, fontWeight: "700", marginTop: 3 },
-  panel: { marginHorizontal: 16, marginTop: 14, backgroundColor: c.card, borderRadius: 26, padding: 15, borderWidth: 1, borderColor: c.line, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 2 },
+  panel: { marginHorizontal: 16, marginTop: -18, backgroundColor: c.card, borderRadius: 26, padding: 15, borderWidth: 1, borderColor: c.line, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.08, shadowRadius: 20, elevation: 2 },
   panelTitle: { color: c.ink, fontSize: 17, fontWeight: "900" },
   panelSub: { color: c.soft, fontSize: 11, fontWeight: "700", marginTop: 4, marginBottom: 13 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
