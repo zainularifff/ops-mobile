@@ -21,7 +21,6 @@ import {
   MonitorCog,
   RefreshCcw,
   Search,
-  Server,
   WifiOff,
 } from "lucide-react-native";
 
@@ -37,30 +36,26 @@ import { formatNumber } from "../../utils/formatters";
 const PAGE_SIZE = 10;
 const DEVICE_FETCH_LIMIT = 500;
 
-const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string; icon: any }> = {
+const titleMap: Record<EndpointDeviceStatusFilter, { title: string; subtitle: string; tone: string }> = {
   all: {
     title: "Managed Endpoints",
-    subtitle: "Live endpoint list from hardware inventory.",
+    subtitle: "Search, filter and open live endpoint records.",
     tone: colors.blue,
-    icon: Server,
   },
   online: {
     title: "Online Devices",
-    subtitle: "Devices currently reporting as online.",
+    subtitle: "Live records currently reporting as online.",
     tone: colors.green,
-    icon: CheckCircle2,
   },
   offline: {
     title: "Offline Devices",
-    subtitle: "Devices currently not reporting or disconnected.",
+    subtitle: "Live records currently not reporting or disconnected.",
     tone: colors.red,
-    icon: WifiOff,
   },
   stale: {
     title: "Stale Devices",
-    subtitle: "Devices with old telemetry based on latest connection time.",
+    subtitle: "Live records with outdated telemetry.",
     tone: colors.amber,
-    icon: Clock3,
   },
 };
 
@@ -120,11 +115,6 @@ export default function ActiveDeviceListScreen() {
   const [error, setError] = useState("");
 
   const config = titleMap[activeFilter];
-  const Icon = config.icon;
-
-  const onlineCount = useMemo(() => records.filter((item) => item.isOnline).length, [records]);
-  const staleCount = useMemo(() => records.filter((item) => item.isStale).length, [records]);
-  const offlineCount = useMemo(() => records.filter((item) => !item.isOnline).length, [records]);
 
   const filteredRecords = useMemo(() => {
     return records.filter((record) => matchesStatus(record, activeFilter) && matchesSearch(record, searchText));
@@ -201,28 +191,17 @@ export default function ActiveDeviceListScreen() {
     >
       <View style={styles.headerRow}>
         <View style={styles.headerTextWrap}>
-          <Text style={styles.eyebrow}>ENDPOINT MANAGEMENT</Text>
+          <Text style={[styles.eyebrow, { color: config.tone }]}>ENDPOINT RECORDS</Text>
           <Text style={styles.title}>{config.title}</Text>
           <Text style={styles.subtitle}>{config.subtitle}</Text>
         </View>
-        <TouchableOpacity style={styles.refreshButton} activeOpacity={0.85} onPress={() => loadDevices(true)}>
+        <TouchableOpacity style={[styles.refreshButton, { backgroundColor: config.tone }]} activeOpacity={0.85} onPress={() => loadDevices(true)}>
           {loading || refreshing ? (
             <ActivityIndicator size="small" color={colors.white} />
           ) : (
             <RefreshCcw size={18} color={colors.white} strokeWidth={2.8} />
           )}
         </TouchableOpacity>
-      </View>
-
-      <View style={[styles.heroCard, { borderColor: `${config.tone}30` }]}> 
-        <View style={[styles.heroIcon, { backgroundColor: config.tone }]}> 
-          <Icon size={24} color={colors.white} strokeWidth={2.8} />
-        </View>
-        <View style={styles.heroCopy}>
-          <Text style={styles.heroLabel}>Live device records</Text>
-          <Text style={styles.heroValue}>{formatNumber(filteredRecords.length)}</Text>
-          <Text style={styles.heroText}>Filtered from {formatNumber(records.length)} hardware inventory assets</Text>
-        </View>
       </View>
 
       {error ? (
@@ -232,13 +211,17 @@ export default function ActiveDeviceListScreen() {
         </View>
       ) : null}
 
-      <View style={styles.summaryRow}>
-        <MiniStat label="Online" value={onlineCount} color={colors.green} />
-        <MiniStat label="Offline" value={offlineCount} color={colors.red} />
-        <MiniStat label="Stale" value={staleCount} color={colors.amber} />
-      </View>
-
       <View style={styles.filterPanel}>
+        <View style={styles.contextRow}>
+          <View>
+            <Text style={styles.contextLabel}>Current view</Text>
+            <Text style={styles.contextTitle}>{config.title}</Text>
+          </View>
+          <View style={[styles.contextBadge, { backgroundColor: `${config.tone}16` }]}> 
+            <Text style={[styles.contextBadgeText, { color: config.tone }]}>{formatNumber(filteredRecords.length)} records</Text>
+          </View>
+        </View>
+
         <View style={styles.searchBox}>
           <Search size={16} color={colors.muted} strokeWidth={2.7} />
           <TextInput
@@ -282,7 +265,7 @@ export default function ActiveDeviceListScreen() {
               Showing {formatNumber(pageStart)}-{formatNumber(pageEnd)} of {formatNumber(filteredRecords.length)}
             </Text>
           </View>
-          <Text style={styles.pageBadge}>Page {safePage}/{totalPages}</Text>
+          <Text style={[styles.pageBadge, { color: config.tone, backgroundColor: `${config.tone}12` }]}>Page {safePage}/{totalPages}</Text>
         </View>
 
         {loading && records.length === 0 ? (
@@ -367,37 +350,23 @@ export default function ActiveDeviceListScreen() {
   );
 }
 
-function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <View style={styles.miniStat}>
-      <Text style={[styles.miniValue, { color }]}>{formatNumber(value)}</Text>
-      <Text style={styles.miniLabel}>{label}</Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background },
   container: { paddingHorizontal: 18, paddingBottom: 116 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 },
   headerTextWrap: { flex: 1, paddingRight: 14 },
-  eyebrow: { color: colors.blue, fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginBottom: 5 },
+  eyebrow: { fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginBottom: 5 },
   title: { color: colors.text, fontSize: 27, fontWeight: "900", letterSpacing: -0.9 },
   subtitle: { color: colors.textSoft, fontSize: 12, fontWeight: "700", lineHeight: 17, marginTop: 5 },
-  refreshButton: { width: 42, height: 42, borderRadius: 16, backgroundColor: colors.navy, alignItems: "center", justifyContent: "center" },
-  heroCard: { backgroundColor: colors.white, borderWidth: 1, borderRadius: 24, padding: 16, flexDirection: "row", alignItems: "center", marginBottom: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.06, shadowRadius: 16, elevation: 2 },
-  heroIcon: { width: 54, height: 54, borderRadius: 20, alignItems: "center", justifyContent: "center", marginRight: 14 },
-  heroCopy: { flex: 1 },
-  heroLabel: { color: colors.textSoft, fontSize: 11, fontWeight: "800" },
-  heroValue: { color: colors.text, fontSize: 34, fontWeight: "900", letterSpacing: -1, marginTop: 2 },
-  heroText: { color: colors.muted, fontSize: 10.5, fontWeight: "700", marginTop: 2 },
+  refreshButton: { width: 42, height: 42, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   errorCard: { marginBottom: 12, padding: 13, borderRadius: 18, backgroundColor: "#FFF5F5", borderWidth: 1, borderColor: "#FAD0D0", flexDirection: "row", alignItems: "center", gap: 9 },
   errorText: { flex: 1, color: colors.textSoft, fontSize: 11, fontWeight: "700" },
-  summaryRow: { flexDirection: "row", gap: 10, marginBottom: 12 },
-  miniStat: { flex: 1, backgroundColor: colors.white, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 12 },
-  miniValue: { fontSize: 22, fontWeight: "900", letterSpacing: -0.7 },
-  miniLabel: { color: colors.textSoft, fontSize: 10.5, fontWeight: "800", marginTop: 2 },
   filterPanel: { backgroundColor: colors.white, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 12, shadowColor: colors.navy, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.05, shadowRadius: 14, elevation: 1 },
+  contextRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  contextLabel: { color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 0.6, textTransform: "uppercase" },
+  contextTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 2 },
+  contextBadge: { paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999 },
+  contextBadgeText: { fontSize: 10.5, fontWeight: "900" },
   searchBox: { minHeight: 44, borderRadius: 16, backgroundColor: colors.surfaceSoft, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, gap: 8 },
   searchInput: { flex: 1, color: colors.text, fontSize: 12.5, fontWeight: "700", paddingVertical: 8 },
   clearSearch: { color: colors.blue, fontSize: 11, fontWeight: "900" },
@@ -409,7 +378,7 @@ const styles = StyleSheet.create({
   listToolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: "#EDF2F8" },
   listTitle: { color: colors.text, fontSize: 13, fontWeight: "900" },
   listMeta: { color: colors.textSoft, fontSize: 10.5, fontWeight: "700", marginTop: 2 },
-  pageBadge: { color: colors.blue, fontSize: 10.5, fontWeight: "900", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: "#EEF4FF", overflow: "hidden" },
+  pageBadge: { fontSize: 10.5, fontWeight: "900", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, overflow: "hidden" },
   loadingBlock: { paddingVertical: 26, alignItems: "center", gap: 9 },
   loadingText: { color: colors.textSoft, fontSize: 12, fontWeight: "800" },
   emptyBlock: { paddingVertical: 28, alignItems: "center" },
