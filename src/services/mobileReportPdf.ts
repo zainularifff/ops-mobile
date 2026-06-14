@@ -97,18 +97,62 @@ function buildActions(report: MobileReportTemplate) {
   ];
 }
 
-export function buildMobileReportHtml(report: MobileReportTemplate, snapshot: MobileOpsSnapshot) {
-  const online = Math.round(onlineRate(snapshot));
+function metricRows(snapshot: MobileOpsSnapshot, attention: number) {
+  return [
+    ["Total Managed Endpoints", number(snapshot.endpoints.total), "All hardware inventory assets included in mobile snapshot."],
+    ["Online Devices", number(snapshot.endpoints.online), `${pct(onlineRate(snapshot))} online coverage.`],
+    ["Offline Devices", number(snapshot.endpoints.offline), "Devices not reporting or disconnected."],
+    ["Stale Devices", number(snapshot.endpoints.stale), "Devices with outdated telemetry."],
+    ["Open Tickets", number(snapshot.tickets.open), "Tickets still requiring support action."],
+    ["Closed Tickets", number(snapshot.tickets.closed), "Resolved tickets in the current snapshot."],
+    ["SLA Exceeded", number(snapshot.tickets.slaExceeded), "Tickets requiring SLA follow-up."],
+    ["Attention Queue", number(attention), "Offline + stale + SLA exceeded items."],
+  ];
+}
+
+function breakdownRows(snapshot: MobileOpsSnapshot, attention: number) {
   const geo = Math.round(geolocationRate(snapshot));
+  const online = Math.round(onlineRate(snapshot));
+  const notDetected = Math.max(snapshot.endpoints.total - snapshot.locationTotal, 0);
+
+  return [
+    ["Endpoint Online Coverage", pct(online), `${number(snapshot.endpoints.online)} online from ${number(snapshot.endpoints.total)} managed endpoints.`],
+    ["Geolocation Detected", number(snapshot.locationTotal), `${pct(geo)} coverage; ${number(notDetected)} devices not detected.`],
+    ["Ticket SLA Achievement", pct(snapshot.tickets.slaAchievement), `${number(snapshot.tickets.slaExceeded)} SLA exceeded tickets.`],
+    ["Current Attention Level", riskTone(attention, 50, 10), "Calculated from endpoint and service desk exposure."],
+  ];
+}
+
+function tableRows(rows: string[][]) {
+  return rows
+    .map(
+      ([a, b, c]) => `
+        <tr>
+          <td>${esc(a)}</td>
+          <td class="metric-value">${esc(b)}</td>
+          <td>${esc(c)}</td>
+        </tr>`
+    )
+    .join("");
+}
+
+function listRows(rows: string[]) {
+  return rows
+    .map(
+      (item, index) => `
+        <tr>
+          <td class="num">${index + 1}</td>
+          <td>${esc(item)}</td>
+        </tr>`
+    )
+    .join("");
+}
+
+export function buildMobileReportHtml(report: MobileReportTemplate, snapshot: MobileOpsSnapshot) {
   const attention = snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded;
   const insights = buildInsights(report, snapshot);
   const actions = buildActions(report);
-  const workload = Math.max(snapshot.tickets.open + snapshot.tickets.closed, snapshot.tickets.total, 1);
-  const openPct = Math.round((snapshot.tickets.open / workload) * 100);
-  const closedPct = Math.round((snapshot.tickets.closed / workload) * 100);
-  const totalEndpoints = Math.max(snapshot.endpoints.total, 1);
-  const offlinePct = Math.round((snapshot.endpoints.offline / totalEndpoints) * 100);
-  const stalePct = Math.max(0, 100 - online - offlinePct);
+  const generated = esc(snapshot.generatedAt);
 
   return `
 <!doctype html>
@@ -117,95 +161,159 @@ export function buildMobileReportHtml(report: MobileReportTemplate, snapshot: Mo
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-  @page { size: A4; margin: 22mm 18mm; }
+  @page { size: A4; margin: 18mm 16mm 16mm; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; margin: 0; color: #111827; background: #f5f7fb; }
-  .page { background: #f5f7fb; }
-  .cover { border-radius: 28px; padding: 28px; color: #fff; background: linear-gradient(135deg, ${report.accent}, #07111f); position: relative; overflow: hidden; }
-  .cover:before { content: ""; position: absolute; width: 220px; height: 220px; border-radius: 999px; background: rgba(255,255,255,.13); right: -70px; top: -80px; }
-  .cover:after { content: ""; position: absolute; width: 150px; height: 150px; border-radius: 999px; background: rgba(255,255,255,.08); left: -45px; bottom: -55px; }
-  .code { font-size: 11px; font-weight: 800; letter-spacing: 1.4px; opacity: .82; text-transform: uppercase; }
-  h1 { font-size: 30px; line-height: 1.05; margin: 14px 0 8px; letter-spacing: -1px; position: relative; }
-  .subtitle { font-size: 13px; line-height: 1.55; opacity: .84; max-width: 470px; position: relative; }
-  .meta { margin-top: 28px; display: flex; gap: 10px; position: relative; }
-  .pill { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: 8px 12px; font-size: 11px; font-weight: 700; }
-  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 18px; }
-  .card { background: #fff; border: 1px solid #e4e9f2; border-radius: 18px; padding: 14px; box-shadow: 0 10px 22px rgba(15, 23, 42, .06); }
-  .label { color: #667085; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; }
-  .value { color: #111827; font-size: 24px; font-weight: 900; margin-top: 6px; letter-spacing: -.5px; }
-  .section { margin-top: 18px; }
-  .section h2 { font-size: 17px; margin: 0 0 10px; letter-spacing: -.4px; }
-  .two { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; }
-  .bar-row { margin-top: 10px; }
-  .bar-label { display:flex; justify-content:space-between; color:#475467; font-size:11px; font-weight:700; margin-bottom:6px; }
-  .track { height: 10px; border-radius: 999px; background: #e8edf5; overflow: hidden; }
-  .fill { height: 10px; border-radius: 999px; background: ${report.accent}; }
-  .stack { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: #e8edf5; margin-top: 10px; }
-  .online { background: #159A6A; width: ${pct(online)}; }
-  .offline { background: #D45264; width: ${pct(offlinePct)}; }
-  .stale { background: #C27A13; width: ${pct(stalePct)}; }
-  ul { margin: 0; padding-left: 18px; }
-  li { margin: 8px 0; color: #344054; font-size: 12px; line-height: 1.45; }
-  .action { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #edf1f6; }
-  .action:last-child { border-bottom: 0; }
-  .num { min-width: 25px; height: 25px; border-radius: 9px; background: ${report.softAccent}; color: ${report.accent}; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 11px; }
-  .action-text { font-size: 12px; line-height: 1.45; color: #344054; font-weight: 700; }
-  .footer { margin-top: 22px; color: #667085; font-size: 10px; text-align: center; }
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    color: #111827;
+    background: #ffffff;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+  .document { width: 100%; }
+  .letterhead {
+    border-bottom: 2px solid #111827;
+    padding-bottom: 12px;
+    margin-bottom: 18px;
+    display: table;
+    width: 100%;
+  }
+  .brand, .doc-meta { display: table-cell; vertical-align: top; }
+  .brand-title { font-size: 20px; font-weight: 900; letter-spacing: -0.3px; }
+  .brand-sub { margin-top: 3px; color: #475467; font-weight: 700; }
+  .doc-meta { text-align: right; color: #475467; font-size: 10px; }
+  .doc-code { color: ${report.accent}; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; }
+  h1 { margin: 0 0 6px; font-size: 26px; line-height: 1.08; letter-spacing: -0.8px; }
+  .summary { color: #475467; font-size: 12px; max-width: 620px; margin-bottom: 16px; }
+  .meta-grid {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 16px;
+    border: 1px solid #d0d5dd;
+  }
+  .meta-grid td {
+    padding: 8px 10px;
+    border: 1px solid #d0d5dd;
+    vertical-align: top;
+  }
+  .meta-label { color: #667085; font-weight: 900; text-transform: uppercase; font-size: 9px; letter-spacing: .5px; }
+  .meta-value { margin-top: 2px; font-weight: 800; color: #111827; }
+  .section-title {
+    margin: 18px 0 8px;
+    padding: 7px 9px;
+    background: #f2f4f7;
+    border-left: 4px solid ${report.accent};
+    font-size: 13px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+  }
+  table.report-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid #d0d5dd;
+    margin-bottom: 12px;
+  }
+  .report-table th {
+    background: #111827;
+    color: #ffffff;
+    text-align: left;
+    padding: 8px 9px;
+    font-size: 10px;
+    letter-spacing: .3px;
+    text-transform: uppercase;
+  }
+  .report-table td {
+    padding: 8px 9px;
+    border: 1px solid #d0d5dd;
+    vertical-align: top;
+  }
+  .report-table tr:nth-child(even) td { background: #f9fafb; }
+  .metric-value { font-size: 15px; font-weight: 900; color: ${report.accent}; white-space: nowrap; }
+  .num {
+    width: 34px;
+    text-align: center;
+    font-weight: 900;
+    color: ${report.accent};
+  }
+  .note {
+    border: 1px solid #d0d5dd;
+    background: #fcfcfd;
+    padding: 10px 12px;
+    color: #344054;
+    margin-top: 6px;
+  }
+  .footer {
+    margin-top: 22px;
+    padding-top: 9px;
+    border-top: 1px solid #d0d5dd;
+    color: #667085;
+    font-size: 9px;
+    display: table;
+    width: 100%;
+  }
+  .footer span { display: table-cell; }
+  .footer .right { text-align: right; }
 </style>
 </head>
 <body>
-  <main class="page">
-    <section class="cover">
-      <div class="code">${esc(report.code)} · ${esc(report.category)}</div>
+  <main class="document">
+    <header class="letterhead">
+      <div class="brand">
+        <div class="brand-title">EMA OPS Mobile</div>
+        <div class="brand-sub">Operational reporting generated from live mobile snapshot</div>
+      </div>
+      <div class="doc-meta">
+        <div class="doc-code">${esc(report.code)} · ${esc(report.category)}</div>
+        <div>Generated: ${generated}</div>
+      </div>
+    </header>
+
+    <section>
       <h1>${esc(report.pdfTitle)}</h1>
-      <div class="subtitle">${esc(report.description)}</div>
-      <div class="meta">
-        <div class="pill">Generated: ${esc(snapshot.generatedAt)}</div>
-        <div class="pill">Focus: ${esc(report.primaryFocus)}</div>
-      </div>
+      <div class="summary">${esc(report.description)}</div>
+      <table class="meta-grid">
+        <tr>
+          <td><div class="meta-label">Report Type</div><div class="meta-value">${esc(report.category)}</div></td>
+          <td><div class="meta-label">Primary Focus</div><div class="meta-value">${esc(report.primaryFocus)}</div></td>
+          <td><div class="meta-label">Snapshot Range</div><div class="meta-value">${esc(snapshot.rangeLabel || "Current Snapshot")}</div></td>
+        </tr>
+      </table>
     </section>
 
-    <section class="grid">
-      <div class="card"><div class="label">Endpoints</div><div class="value">${number(snapshot.endpoints.total)}</div></div>
-      <div class="card"><div class="label">Online</div><div class="value">${number(snapshot.endpoints.online)}</div></div>
-      <div class="card"><div class="label">Open Tickets</div><div class="value">${number(snapshot.tickets.open)}</div></div>
-      <div class="card"><div class="label">Attention</div><div class="value">${number(attention)}</div></div>
-    </section>
+    <div class="section-title">Executive Metrics</div>
+    <table class="report-table">
+      <thead><tr><th>Metric</th><th>Value</th><th>Interpretation</th></tr></thead>
+      <tbody>${tableRows(metricRows(snapshot, attention))}</tbody>
+    </table>
 
-    <section class="section two">
-      <div class="card">
-        <h2>Operational Coverage</h2>
-        <div class="bar-row"><div class="bar-label"><span>Online Coverage</span><span>${pct(online)}</span></div><div class="track"><div class="fill" style="width:${pct(online)}"></div></div></div>
-        <div class="bar-row"><div class="bar-label"><span>Geolocation Coverage</span><span>${pct(geo)}</span></div><div class="track"><div class="fill" style="width:${pct(geo)}"></div></div></div>
-        <div class="stack"><div class="online"></div><div class="offline"></div><div class="stale"></div></div>
-      </div>
-      <div class="card">
-        <h2>Risk Signal</h2>
-        <div class="label">Attention Level</div>
-        <div class="value">${riskTone(attention, 50, 10)}</div>
-        <div class="label" style="margin-top:12px;">SLA Achievement</div>
-        <div class="value">${pct(snapshot.tickets.slaAchievement)}</div>
-      </div>
-    </section>
+    <div class="section-title">Coverage Breakdown</div>
+    <table class="report-table">
+      <thead><tr><th>Area</th><th>Result</th><th>Details</th></tr></thead>
+      <tbody>${tableRows(breakdownRows(snapshot, attention))}</tbody>
+    </table>
 
-    <section class="section two">
-      <div class="card">
-        <h2>Key Insights</h2>
-        <ul>${insights.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>
-      </div>
-      <div class="card">
-        <h2>Ticket Workload</h2>
-        <div class="bar-row"><div class="bar-label"><span>Open</span><span>${pct(openPct)}</span></div><div class="track"><div class="fill" style="width:${pct(openPct)}"></div></div></div>
-        <div class="bar-row"><div class="bar-label"><span>Closed</span><span>${pct(closedPct)}</span></div><div class="track"><div class="fill" style="width:${pct(closedPct)}"></div></div></div>
-      </div>
-    </section>
+    <div class="section-title">Key Findings</div>
+    <table class="report-table">
+      <thead><tr><th>No.</th><th>Finding</th></tr></thead>
+      <tbody>${listRows(insights)}</tbody>
+    </table>
 
-    <section class="section card">
-      <h2>Recommended Actions</h2>
-      ${actions.map((item, index) => `<div class="action"><div class="num">${index + 1}</div><div class="action-text">${esc(item)}</div></div>`).join("")}
-    </section>
+    <div class="section-title">Recommended Actions</div>
+    <table class="report-table">
+      <thead><tr><th>No.</th><th>Action</th></tr></thead>
+      <tbody>${listRows(actions)}</tbody>
+    </table>
 
-    <div class="footer">EMA OPS Mobile · Compact report generated from live mobile snapshot</div>
+    <div class="note">
+      This PDF is intended as a concise operational report for mobile review. Detailed device inventory, ticket drilldown, and branch-level investigation remain available through the relevant operational screens.
+    </div>
+
+    <footer class="footer">
+      <span>EMA OPS Mobile · ${esc(report.shortTitle)}</span>
+      <span class="right">Generated from live snapshot</span>
+    </footer>
   </main>
 </body>
 </html>`;
