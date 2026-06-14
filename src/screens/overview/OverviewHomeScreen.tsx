@@ -11,19 +11,9 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Clock3,
-  FileText,
-  MapPin,
-  RefreshCcw,
-  Server,
-  Ticket,
-  Wifi,
-  WifiOff,
-} from "lucide-react-native";
+import { AlertTriangle, ArrowRight, FileText, MapPin, RefreshCcw, Ticket } from "lucide-react-native";
 
+import EndpointVisual, { type EndpointVisualKind } from "../../components/EndpointVisual";
 import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
 
@@ -48,10 +38,10 @@ const c = {
 type EndpointTone = "blue" | "green" | "red" | "amber";
 
 const tone = {
-  blue: { main: c.blue, soft: "#E9EEFF", gradient: ["#EEF3FF", "#FFFFFF"] },
-  green: { main: c.green, soft: "#E4F8EF", gradient: ["#ECFBF3", "#FFFFFF"] },
-  red: { main: c.red, soft: "#FFE8EC", gradient: ["#FFF0F3", "#FFFFFF"] },
-  amber: { main: c.amber, soft: "#FFF2DD", gradient: ["#FFF5E6", "#FFFFFF"] },
+  blue: { main: c.blue, gradient: ["#EEF3FF", "#FFFFFF"] },
+  green: { main: c.green, gradient: ["#ECFBF3", "#FFFFFF"] },
+  red: { main: c.red, gradient: ["#FFF0F3", "#FFFFFF"] },
+  amber: { main: c.amber, gradient: ["#FFF5E6", "#FFFFFF"] },
 } as const;
 
 export default function OverviewHomeScreen() {
@@ -142,7 +132,7 @@ export default function OverviewHomeScreen() {
             progress={100}
             progressLabel="Inventory scope"
             toneName="blue"
-            icon={Server}
+            graphic="managed"
             onPress={() => openEndpointList("all")}
           />
           <EndpointActionCard
@@ -152,7 +142,7 @@ export default function OverviewHomeScreen() {
             progress={onlineRate}
             progressLabel={`${onlineRate}% online coverage`}
             toneName="green"
-            icon={Wifi}
+            graphic="online"
             onPress={() => openEndpointList("online")}
           />
           <EndpointActionCard
@@ -162,7 +152,7 @@ export default function OverviewHomeScreen() {
             progress={offlineRate}
             progressLabel={`${offlineRate}% require follow-up`}
             toneName="red"
-            icon={WifiOff}
+            graphic="offline"
             onPress={() => openEndpointList("offline")}
           />
           <EndpointActionCard
@@ -172,7 +162,7 @@ export default function OverviewHomeScreen() {
             progress={staleRate}
             progressLabel={`${staleRate}% stale telemetry`}
             toneName="amber"
-            icon={Clock3}
+            graphic="stale"
             onPress={() => openEndpointList("stale")}
           />
         </View>
@@ -235,7 +225,7 @@ function EndpointActionCard({
   progress,
   progressLabel,
   toneName,
-  icon: Icon,
+  graphic,
   onPress,
 }: {
   title: string;
@@ -244,7 +234,7 @@ function EndpointActionCard({
   progress: number;
   progressLabel: string;
   toneName: EndpointTone;
-  icon: any;
+  graphic: EndpointVisualKind;
   onPress: () => void;
 }) {
   const t = tone[toneName];
@@ -255,9 +245,7 @@ function EndpointActionCard({
       <LinearGradient colors={t.gradient as any} style={styles.deviceArtwork}>
         <View style={[styles.artOrbLarge, { backgroundColor: `${t.main}14` }]} />
         <View style={[styles.artOrbSmall, { backgroundColor: `${t.main}24` }]} />
-        <View style={[styles.artIconPlate, { backgroundColor: `${t.main}12`, borderColor: `${t.main}24` }]}>
-          <Icon size={24} color={t.main} strokeWidth={2.45} />
-        </View>
+        <EndpointVisual kind={graphic} color={t.main} />
       </LinearGradient>
 
       <View style={styles.endpointContent}>
@@ -316,7 +304,7 @@ function SmallFeatureCard({
     <TouchableOpacity style={styles.featureCardWrap} activeOpacity={0.88} onPress={onPress}>
       <LinearGradient colors={colors as any} style={styles.featureCard}>
         <View style={styles.featureTopRow}>
-          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}>
+          <View style={[styles.featureIcon, { backgroundColor: `${accent}18` }]}> 
             {icon === "geo" ? <MapPin size={20} color={accent} strokeWidth={2.7} /> : <FileText size={20} color={accent} strokeWidth={2.7} />}
           </View>
           <ArrowRight size={15} color={accent} strokeWidth={2.8} />
@@ -408,14 +396,6 @@ const styles = StyleSheet.create({
   deviceArtwork: { width: 72, minHeight: 94, borderRadius: 20, overflow: "hidden", alignItems: "center", justifyContent: "center", marginRight: 12 },
   artOrbLarge: { position: "absolute", width: 64, height: 64, borderRadius: 64, top: 7, right: -22 },
   artOrbSmall: { position: "absolute", width: 36, height: 36, borderRadius: 36, bottom: 12, left: -8 },
-  artIconPlate: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   endpointContent: { flex: 1, paddingVertical: 8, paddingRight: 4 },
   endpointTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
   endpointTitleWrap: { flex: 1, paddingRight: 10 },
