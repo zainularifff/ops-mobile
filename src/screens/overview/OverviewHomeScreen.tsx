@@ -36,11 +36,7 @@ export default function OverviewHomeScreen() {
   }, [snapshot.endpoints.online, snapshot.endpoints.total]);
 
   const attention = snapshot.endpoints.offline + snapshot.endpoints.stale + snapshot.tickets.slaExceeded;
-
-  const openEndpointList = (status: "all" | "online" | "offline" | "stale") => {
-    navigation.navigate("ActiveDeviceList", { status });
-  };
-
+  const openEndpointList = (status: "all" | "online" | "offline" | "stale") => navigation.navigate("ActiveDeviceList", { status });
   const openTab = (name: string) => navigation.getParent()?.navigate(name);
   const refresh = () => reloadSnapshot({ silent: true });
 
@@ -117,7 +113,7 @@ export default function OverviewHomeScreen() {
         </TouchableOpacity>
 
         <View style={styles.bottomRow}>
-          <InfoCard title="Device Geolocation" text="Latest location per device is in Operator view." value={`${formatNumber(snapshot.locationTotal)} devices`} icon={MapPin} color={c.cyan} onPress={() => openTab("Operator")} />
+          <InfoCard title="Device Geolocation" text="Detected vs not detected device location coverage." value="Open coverage" icon={MapPin} color={c.cyan} onPress={() => navigation.navigate("GeolocationSummary")} />
           <InfoCard title="Latest Report" text={snapshot.latestReport?.title || "No report item found."} value="Open Reports" icon={FileText} color={c.purple} onPress={() => openTab("Reports")} />
         </View>
       </ScrollView>
@@ -182,7 +178,7 @@ const styles = StyleSheet.create({
   serviceSub: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
   ticketRow: { flexDirection: "row", borderRadius: 18, overflow: "hidden", borderWidth: 1, borderColor: "#E5EEF8", backgroundColor: "#F8FBFF" },
   ticketMini: { flex: 1, paddingVertical: 13, alignItems: "center", borderRightWidth: 1, borderRightColor: "#E5EEF8" },
-  ticketValue: { color: c.ink, fontSize: 21, fontWeight: "900" },
+  ticketValue: { color: c.ink, fontSize: 21, fontWeight: "900", letterSpacing: -0.6 },
   ticketLabel: { color: c.soft, fontSize: 9.5, fontWeight: "800", marginTop: 3 },
   bottomRow: { flexDirection: "row", gap: 10, paddingHorizontal: 16, marginTop: 14 },
   infoCard: { flex: 1, backgroundColor: c.card, borderRadius: 24, padding: 14, borderWidth: 1, borderColor: c.line, minHeight: 160, shadowColor: "#4F6078", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.07, shadowRadius: 18, elevation: 2 },
