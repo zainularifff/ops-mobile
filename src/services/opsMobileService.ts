@@ -31,6 +31,41 @@ export type MobileReportItem = {
   lastGenerated?: string;
 };
 
+export type MobileEndpointSnapshot = {
+  total: number;
+  online: number;
+  offline: number;
+  stale: number;
+};
+
+export type MobileTicketSnapshot = {
+  total: number;
+  open: number;
+  closed: number;
+  slaExceeded: number;
+  slaAchievement: number;
+};
+
+export type MobileLatestLocation = {
+  deviceId: string;
+  deviceName: string;
+  username: string;
+  model: string;
+  address: string;
+  latitude: string;
+  longitude: string;
+  time: string;
+};
+
+export type MobileOpsSnapshot = {
+  generatedAt: string;
+  rangeLabel: string;
+  endpoints: MobileEndpointSnapshot;
+  tickets: MobileTicketSnapshot;
+  latestReport: MobileReportItem | null;
+  latestLocation: MobileLatestLocation | null;
+};
+
 type FetchOptions = {
   force?: boolean;
 };
@@ -44,9 +79,11 @@ type CacheEntry<T> = {
   value: T;
 };
 
+const SNAPSHOT_CACHE_KEY = "mobile-ops-snapshot";
 const SUMMARY_CACHE_KEY = "operations-summary";
 const REPORTS_CACHE_KEY = "report-catalog";
 const SUMMARY_CACHE_TTL_MS = 60 * 1000;
+const SNAPSHOT_CACHE_TTL_MS = 45 * 1000;
 const WORKLIST_CACHE_TTL_MS = 30 * 1000;
 const REPORTS_CACHE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_WORKLIST_LIMIT = 25;
@@ -128,6 +165,10 @@ export function clearOpsMobileCache(prefix?: string) {
   }
 }
 
+export function getCachedMobileOpsSnapshot() {
+  return getCachedValue<MobileOpsSnapshot>(SNAPSHOT_CACHE_KEY);
+}
+
 export function getCachedOperationsSummary() {
   return getCachedValue<DashboardSummary>(SUMMARY_CACHE_KEY);
 }
@@ -176,6 +217,55 @@ function pickKpiValue(kpiCards: any[] = [], title: string) {
   return asNumber(card?.value, 0);
 }
 
+function formatDateTime(value: unknown) {
+  const raw = cleanText(value, "");
+  if (!raw) return "-";
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
+
+  return date.toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getDateSortValue(value: unknown) {
+  const raw = cleanText(value, "");
+  if (!raw) return 0;
+
+  const date = new Date(raw);
+  const time = date.getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function pickLatestReport(reports: MobileReportItem[]) {
+  if (!reports.length) return null;
+
+  return [...reports].sort((a, b) => {
+    return getDateSortValue(b.lastGenerated) - getDateSortValue(a.lastGenerated);
+  })[0];
+}
+
+function mapLatestLocation(rows: any[]): MobileLatestLocation | null {
+  const first = rows[0];
+  if (!first) return null;
+
+  return {
+    deviceId: cleanText(first?.DeviceID || first?.deviceID),
+    deviceName: cleanText(first?.DeviceName || first?.ComputerName || first?.Object_Client_Name),
+    username: cleanText(first?.LastLoggedInUser || first?.Username),
+    model: cleanText(first?.DeviceModelName || first?.Model),
+    address: cleanText(first?.LocationName || first?.Address),
+    latitude: cleanText(first?.Latitude || first?.latitude),
+    longitude: cleanText(first?.Longitude || first?.longitude),
+    time: formatDateTime(first?.Time || first?.DateTime),
+  };
+}
+
 function mapTaskType(task: any): MobileWorkItem["type"] {
   const value = `${task?.classification || ""} ${task?.taskType || ""} ${task?.commandType || ""} ${task?.description || ""}`.toLowerCase();
 
@@ -200,9 +290,13 @@ function mapTaskPriority(task: any): MobileWorkItem["priority"] {
   return "Low";
 }
 
-async function requestOperationsSummary(): Promise<DashboardSummary> {
+async function requestOperationsDashboard() {
   const response: any = await apiRequest("/api/dashboard/it-operations");
-  const data = response?.data || response || {};
+  return response?.data || response || {};
+}
+
+async function requestOperationsSummary(): Promise<DashboardSummary> {
+  const data = await requestOperationsDashboard();
   const kpiCards = Array.isArray(data?.kpiCards) ? data.kpiCards : [];
   const totalEndpoints = asNumber(
     data?.hardware?.totalDevices,
@@ -213,7 +307,10 @@ async function requestOperationsSummary(): Promise<DashboardSummary> {
   return {
     totalEndpoints,
     activeDevices,
-    offlineDevices: Math.max(totalEndpoints - activeDevices, 0),
+    offlineDevices: asNumber(
+      data?.hardware?.offlineDevices,
+      Math.max(totalEndpoints - activeDevices, 0)
+    ),
     openTickets: asNumber(
       data?.serviceDesk?.pendingTickets,
       pickKpiValue(kpiCards, "Open Incidents")
@@ -307,7 +404,7 @@ async function requestReportCatalog(): Promise<MobileReportItem[]> {
       tone: item?.tone || "blue",
       pages: asNumber(item?.pages, 0),
       frequency: cleanText(item?.frequency, ""),
-      lastGenerated: cleanText(item?.lastGenerated || item?.generatedAt, ""),
+      lastGenerated: cleanText(item?.lastGenerated || item?.generatedAt || item?.updatedAt, ""),
     };
   });
 }
@@ -319,6 +416,82 @@ export async function fetchReportCatalog(
     REPORTS_CACHE_KEY,
     REPORTS_CACHE_TTL_MS,
     requestReportCatalog,
+    options
+  );
+}
+
+async function requestLatestLocation() {
+  const response: any = await apiRequest("/api/geolocation/all-live?limit=1");
+  const rows = Array.isArray(response?.data) ? response.data : [];
+  return mapLatestLocation(rows);
+}
+
+async function requestMobileOpsSnapshot(): Promise<MobileOpsSnapshot> {
+  const [dashboardResult, reportsResult, locationResult] = await Promise.allSettled([
+    requestOperationsDashboard(),
+    requestReportCatalog(),
+    requestLatestLocation(),
+  ]);
+
+  if (dashboardResult.status === "rejected") {
+    throw dashboardResult.reason;
+  }
+
+  const data = dashboardResult.value || {};
+  const hardware = data?.hardware || {};
+  const serviceDesk = data?.serviceDesk || {};
+  const trendSummary = data?.trendSummary || {};
+  const kpiCards = Array.isArray(data?.kpiCards) ? data.kpiCards : [];
+
+  const totalEndpoints = asNumber(
+    hardware?.totalDevices,
+    pickKpiValue(kpiCards, "Total Devices")
+  );
+  const online = asNumber(hardware?.onlineDevices, 0);
+  const offline = asNumber(
+    hardware?.offlineDevices,
+    Math.max(totalEndpoints - online, 0)
+  );
+  const stale = asNumber(hardware?.staleSync, 0);
+
+  const open = asNumber(
+    serviceDesk?.pendingTickets,
+    pickKpiValue(kpiCards, "Open Incidents")
+  );
+  const closed = asNumber(trendSummary?.resolved, 0);
+  const slaExceeded = asNumber(serviceDesk?.overdueTickets, 0);
+
+  const reports = reportsResult.status === "fulfilled" ? reportsResult.value : [];
+  const latestLocation = locationResult.status === "fulfilled" ? locationResult.value : null;
+
+  return {
+    generatedAt: formatDateTime(data?.generatedAt || new Date().toISOString()),
+    rangeLabel: cleanText(data?.rangeLabel, "Last 7 Days"),
+    endpoints: {
+      total: totalEndpoints,
+      online,
+      offline,
+      stale,
+    },
+    tickets: {
+      total: Math.max(open + closed, open, closed),
+      open,
+      closed,
+      slaExceeded,
+      slaAchievement: asNumber(serviceDesk?.slaAchievement, 0),
+    },
+    latestReport: pickLatestReport(reports),
+    latestLocation,
+  };
+}
+
+export async function fetchMobileOpsSnapshot(
+  options: FetchOptions = {}
+): Promise<MobileOpsSnapshot> {
+  return fetchWithCache(
+    SNAPSHOT_CACHE_KEY,
+    SNAPSHOT_CACHE_TTL_MS,
+    requestMobileOpsSnapshot,
     options
   );
 }
