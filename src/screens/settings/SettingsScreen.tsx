@@ -25,6 +25,14 @@ import {
   getBiometricEnabled,
   setBiometricEnabled,
 } from "../../services/secureStorage";
+import {
+  getTwoFactorStatus,
+  updateTwoFactorStatus,
+} from "../../services/authService";
+import {
+  authenticateWithBiometric,
+  isBiometricAvailable,
+} from "../../services/biometricService";
 import { getAppBuildNumber, getAppVersion } from "../../utils/appInfo";
 import { colors } from "../../theme/colors";
 
@@ -51,11 +59,19 @@ type DialogState = {
   onPrimary?: () => void | Promise<void>;
 };
 
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message || fallback;
+  return String(error || fallback);
+}
+
 export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
   const navigation = useNavigation<any>();
 
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true);
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [twoFactorLoading, setTwoFactorLoading] = useState(true);
+  const [twoFactorAvailable, setTwoFactorAvailable] = useState(true);
   const [biometricEnabled, setBiometricEnabledState] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
 
   const appVersion = getAppVersion();
   const buildNumber = getAppBuildNumber();
@@ -83,6 +99,18 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
     } catch (error) {
       setBiometricEnabledState(false);
     }
+
+    try {
+      setTwoFactorLoading(true);
+      const status = await getTwoFactorStatus();
+      setTwoFactorEnabled(Boolean(status.enabled));
+      setTwoFactorAvailable(true);
+    } catch (error) {
+      setTwoFactorEnabled(false);
+      setTwoFactorAvailable(false);
+    } finally {
+      setTwoFactorLoading(false);
+    }
   }
 
   function closeDialog() {
@@ -99,39 +127,110 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
     });
   }
 
-  function handleTwoFactorToggle(value: boolean) {
+  async function handleTwoFactorToggle(value: boolean) {
+    if (twoFactorLoading) return;
+
+    const previousValue = twoFactorEnabled;
     setTwoFactorEnabled(value);
+    setTwoFactorLoading(true);
 
-    showDialog({
-      type: value ? "success" : "info",
-      title: "2FA Verification",
-      message: value
-        ? "2FA verification has been enabled during login."
-        : "2FA verification has been disabled for this prototype.",
-      primaryText: "Done",
-    });
-  }
-
-  async function handleBiometricToggle(value: boolean) {
     try {
-      await setBiometricEnabled(value);
-      setBiometricEnabledState(value);
+      const status = await updateTwoFactorStatus(value);
+      setTwoFactorEnabled(Boolean(status.enabled));
+      setTwoFactorAvailable(true);
 
       showDialog({
         type: value ? "success" : "info",
-        title: "Biometric Login",
+        title: "2FA Verification",
         message: value
-          ? "Biometric login has been enabled for this device."
-          : "Biometric login has been disabled for this device.",
+          ? "2FA verification has been enabled for your account. Future login will require the second verification step."
+          : "2FA verification has been disabled for your account.",
         primaryText: "Done",
       });
     } catch (error) {
+      setTwoFactorEnabled(previousValue);
+      setTwoFactorAvailable(false);
+
+      showDialog({
+        type: "danger",
+        title: "2FA Update Failed",
+        message: getErrorMessage(
+          error,
+          "Unable to update 2FA setting. Please confirm the backend supports 2FA settings endpoints."
+        ),
+        primaryText: "OK",
+      });
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  }
+
+  async function handleBiometricToggle(value: boolean) {
+    if (biometricLoading) return;
+
+    const previousValue = biometricEnabled;
+    setBiometricLoading(true);
+
+    try {
+      if (!value) {
+        await setBiometricEnabled(false);
+        setBiometricEnabledState(false);
+
+        showDialog({
+          type: "info",
+          title: "Biometric Login",
+          message: "Biometric login has been disabled for this device.",
+          primaryText: "Done",
+        });
+        return;
+      }
+
+      const available = await isBiometricAvailable();
+
+      if (!available) {
+        setBiometricEnabledState(false);
+        showDialog({
+          type: "danger",
+          title: "Biometric Not Available",
+          message: "Fingerprint or face unlock is not available or not enrolled on this device. Set it up in Android/iOS settings first.",
+          primaryText: "OK",
+        });
+        return;
+      }
+
+      const verified = await authenticateWithBiometric("Enable biometric login for OPS Mobile");
+
+      if (!verified) {
+        setBiometricEnabledState(previousValue);
+        showDialog({
+          type: "info",
+          title: "Biometric Not Enabled",
+          message: "Biometric verification was cancelled. The setting was not changed.",
+          primaryText: "OK",
+        });
+        return;
+      }
+
+      await setBiometricEnabled(true);
+      setBiometricEnabledState(true);
+
+      showDialog({
+        type: "success",
+        title: "Biometric Login",
+        message: "Biometric login has been verified and enabled for this device.",
+        primaryText: "Done",
+      });
+    } catch (error) {
+      setBiometricEnabledState(previousValue);
+
       showDialog({
         type: "danger",
         title: "Update Failed",
         message: "Unable to update biometric setting. Please try again.",
         primaryText: "OK",
       });
+    } finally {
+      setBiometricLoading(false);
     }
   }
 
@@ -197,28 +296,36 @@ export default function SettingsScreen({ onLogout }: SettingsScreenProps) {
               icon={ShieldCheck}
               title="2FA Verification"
               description={
-                twoFactorEnabled
-                  ? "Second verification is enabled during login"
-                  : "Second verification is currently disabled"
+                twoFactorLoading
+                  ? "Checking 2FA status..."
+                  : !twoFactorAvailable
+                    ? "2FA setting endpoint is unavailable"
+                    : twoFactorEnabled
+                      ? "Second verification is enabled during login"
+                      : "Second verification is currently disabled"
               }
               value={twoFactorEnabled}
               onValueChange={handleTwoFactorToggle}
               tintColor={colors.blue}
               activeTrackColor="#BFD7FF"
+              disabled={twoFactorLoading || !twoFactorAvailable}
             />
 
             <ToggleSettingRow
               icon={Fingerprint}
               title="Biometric Login"
               description={
-                biometricEnabled
-                  ? "Fingerprint or face unlock is enabled"
-                  : "Fingerprint or face unlock is disabled"
+                biometricLoading
+                  ? "Verifying biometric setting..."
+                  : biometricEnabled
+                    ? "Fingerprint or face unlock is enabled"
+                    : "Fingerprint or face unlock is disabled"
               }
               value={biometricEnabled}
               onValueChange={handleBiometricToggle}
               tintColor={colors.green}
               activeTrackColor="#BBF7D0"
+              disabled={biometricLoading}
             />
           </View>
 
@@ -306,9 +413,10 @@ function ToggleSettingRow({
   onValueChange,
   tintColor = colors.blue,
   activeTrackColor = "#BFD7FF",
+  disabled = false,
 }: any) {
   return (
-    <View style={styles.settingRow}>
+    <View style={[styles.settingRow, disabled && { opacity: 0.62 }]}> 
       <View style={[styles.settingIcon, settingIconDynamicStyle(tintColor)]}>
         <Icon size={18} color={tintColor} strokeWidth={2.7} />
       </View>
@@ -320,6 +428,7 @@ function ToggleSettingRow({
 
       <Switch
         value={value}
+        disabled={disabled}
         onValueChange={onValueChange}
         trackColor={{
           false: "#D7E0EA",
