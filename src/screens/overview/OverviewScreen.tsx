@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -23,7 +23,10 @@ import {
 } from "lucide-react-native";
 
 import StatusPill from "../../components/StatusPill";
-import { dashboardSummary } from "../../data/mockDashboard";
+import {
+  useLiveWorklist,
+  useOperationsSummary,
+} from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
 import { styles } from "./OverviewScreen.styles";
 
@@ -38,48 +41,6 @@ const palette = {
   green: "#059669",
   navy: "#07111F",
 };
-
-const operationalExceptions = [
-  {
-    title: "Stale device detected",
-    source: "JPJ-PUTRAJAYA-WS-014",
-    site: "Putrajaya",
-    time: "12 min ago",
-    severity: "High",
-    icon: WifiOff,
-    color: palette.red,
-    reason:
-      "Device has not reported update within the expected monitoring window.",
-    recommendedAction:
-      "Verify endpoint status, network availability, and agent health. Escalate to site support if device is still active.",
-  },
-  {
-    title: "SLA risk ticket pending",
-    source: "INC-24051",
-    site: "Kuala Lumpur HQ",
-    time: "18 min ago",
-    severity: "High",
-    icon: Ticket,
-    color: palette.purple,
-    reason:
-      "Ticket is approaching SLA escalation threshold and requires follow-up.",
-    recommendedAction:
-      "Review ticket owner, update ticket progress, and escalate to support lead if resolution is blocked.",
-  },
-  {
-    title: "Unauthorized software pending review",
-    source: "SHAH-ALAM-LAP-022",
-    site: "Shah Alam",
-    time: "25 min ago",
-    severity: "Medium",
-    icon: FileWarning,
-    color: palette.amber,
-    reason:
-      "Detected software requires validation against approved software policy.",
-    recommendedAction:
-      "Confirm whether software is approved, business-required, or should be removed from the endpoint.",
-  },
-];
 
 type StatusCardConfig = {
   id: string;
@@ -104,10 +65,55 @@ type PriorityConfig = {
   target: string;
 };
 
+type OverviewException = {
+  title: string;
+  source: string;
+  site: string;
+  time: string;
+  severity: string;
+  icon: any;
+  color: string;
+  reason: string;
+  recommendedAction: string;
+};
+
+function getWorkItemIcon(type: string) {
+  if (type === "ticket") return Ticket;
+  if (type === "software") return FileWarning;
+  if (type === "remote") return AlertTriangle;
+  if (type === "asset") return Server;
+  return WifiOff;
+}
+
+function getWorkItemColor(type: string, priority: string) {
+  if (priority === "High") return palette.red;
+  if (type === "ticket") return palette.purple;
+  if (type === "software") return palette.amber;
+  if (type === "remote") return palette.cyan;
+  return palette.blue;
+}
+
 export default function OverviewScreen() {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  const [refreshing, setRefreshing] = useState(false);
+  const {
+    summary: dashboardSummary,
+    loading: summaryLoading,
+    refreshing: summaryRefreshing,
+    error: summaryError,
+    reloadSummary,
+  } = useOperationsSummary();
+  const {
+    items: workItems,
+    loading: worklistLoading,
+    refreshing: worklistRefreshing,
+    error: worklistError,
+    reloadWorklist,
+  } = useLiveWorklist();
+
+  const refreshing = summaryRefreshing || worklistRefreshing;
+  const hasLoading = summaryLoading || worklistLoading;
+  const errorText = summaryError || worklistError;
 
   const activeCoverage = useMemo(() => {
     if (!dashboardSummary.totalEndpoints) return 0;
@@ -115,20 +121,25 @@ export default function OverviewScreen() {
     return Math.round(
       (dashboardSummary.activeDevices / dashboardSummary.totalEndpoints) * 100
     );
-  }, []);
+  }, [dashboardSummary.activeDevices, dashboardSummary.totalEndpoints]);
 
   const notReporting = useMemo(() => {
     return Math.max(
-      dashboardSummary.totalEndpoints - dashboardSummary.activeDevices,
+      dashboardSummary.offlineDevices ||
+        dashboardSummary.totalEndpoints - dashboardSummary.activeDevices,
       0
     );
-  }, []);
+  }, [
+    dashboardSummary.activeDevices,
+    dashboardSummary.offlineDevices,
+    dashboardSummary.totalEndpoints,
+  ]);
 
   const notReportingRate = useMemo(() => {
     if (!dashboardSummary.totalEndpoints) return 0;
 
     return Math.round((notReporting / dashboardSummary.totalEndpoints) * 100);
-  }, [notReporting]);
+  }, [dashboardSummary.totalEndpoints, notReporting]);
 
   const highRiskRate = useMemo(() => {
     if (!dashboardSummary.openTickets) return 0;
@@ -136,7 +147,21 @@ export default function OverviewScreen() {
     return Math.round(
       (dashboardSummary.highRiskExceptions / dashboardSummary.openTickets) * 100
     );
-  }, []);
+  }, [dashboardSummary.highRiskExceptions, dashboardSummary.openTickets]);
+
+  const operationalExceptions: OverviewException[] = useMemo(() => {
+    return workItems.slice(0, 3).map((item) => ({
+      title: item.title,
+      source: item.source,
+      site: item.site,
+      time: item.updated,
+      severity: item.priority,
+      icon: getWorkItemIcon(item.type),
+      color: getWorkItemColor(item.type, item.priority),
+      reason: item.reason,
+      recommendedAction: item.action,
+    }));
+  }, [workItems]);
 
   const statusCards: StatusCardConfig[] = [
     {
@@ -222,7 +247,7 @@ export default function OverviewScreen() {
     navigation.navigate(target);
   }
 
-  function openException(item: (typeof operationalExceptions)[number]) {
+  function openException(item: OverviewException) {
     navigation.navigate("ExceptionDetail", {
       title: item.title,
       source: item.source,
@@ -235,11 +260,8 @@ export default function OverviewScreen() {
   }
 
   function handleRefresh() {
-    setRefreshing(true);
-
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 650);
+    reloadSummary({ silent: true });
+    reloadWorklist({ silent: true });
   }
 
   return (
@@ -268,7 +290,7 @@ export default function OverviewScreen() {
           <View>
             <Text style={styles.pageTitle}>Operations Overview</Text>
             <Text style={styles.pageMeta}>
-              Malaysia Sites  •  Mock Data  •  Just now
+              Malaysia Sites  •  Live Data  •  Pull to refresh
             </Text>
           </View>
 
@@ -277,13 +299,28 @@ export default function OverviewScreen() {
             activeOpacity={0.85}
             onPress={handleRefresh}
           >
-            {refreshing ? (
+            {refreshing || hasLoading ? (
               <ActivityIndicator size="small" color={palette.blue} />
             ) : (
               <RefreshCcw size={18} color={palette.blue} strokeWidth={2.7} />
             )}
           </TouchableOpacity>
         </View>
+
+        {errorText ? (
+          <View style={styles.companionCard}>
+            <View style={styles.companionIcon}>
+              <AlertTriangle size={18} color={palette.red} strokeWidth={2.7} />
+            </View>
+
+            <View style={styles.companionTextWrap}>
+              <Text style={styles.companionTitle}>Live data unavailable</Text>
+              <Text style={styles.companionDesc}>{errorText}</Text>
+            </View>
+
+            <StatusPill label="Check" tone="red" />
+          </View>
+        ) : null}
 
         <View style={styles.heroCard}>
           <View style={styles.heroGlowTop} />
@@ -295,7 +332,7 @@ export default function OverviewScreen() {
             </View>
 
             <View style={styles.heroBadge}>
-              <Text style={styles.heroBadgeText}>MONITORING VIEW</Text>
+              <Text style={styles.heroBadgeText}>LIVE MONITORING</Text>
             </View>
           </View>
 
@@ -388,20 +425,24 @@ export default function OverviewScreen() {
           </View>
 
           <View style={styles.exceptionList}>
-            {operationalExceptions.map((item, index) => (
-              <ExceptionRow
-                key={item.title}
-                title={item.title}
-                source={item.source}
-                site={item.site}
-                time={item.time}
-                severity={item.severity}
-                icon={item.icon}
-                color={item.color}
-                isLast={index === operationalExceptions.length - 1}
-                onPress={() => openException(item)}
-              />
-            ))}
+            {operationalExceptions.length === 0 ? (
+              <Text style={styles.companionDesc}>No live exception item found.</Text>
+            ) : (
+              operationalExceptions.map((item, index) => (
+                <ExceptionRow
+                  key={`${item.source}-${item.title}`}
+                  title={item.title}
+                  source={item.source}
+                  site={item.site}
+                  time={item.time}
+                  severity={item.severity}
+                  icon={item.icon}
+                  color={item.color}
+                  isLast={index === operationalExceptions.length - 1}
+                  onPress={() => openException(item)}
+                />
+              ))
+            )}
           </View>
         </View>
 
