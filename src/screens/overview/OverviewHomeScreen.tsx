@@ -28,8 +28,8 @@ import { useMobileOpsSnapshot } from "../../hooks/useLiveOpsData";
 import { formatNumber } from "../../utils/formatters";
 
 const c = {
-  bg: "#EDE9FF",
-  bg2: "#EAF8F7",
+  bg: "#EFEAFB",
+  bg2: "#E8F6F3",
   card: "#FFFFFF",
   ink: "#111827",
   soft: "#5B6475",
@@ -38,20 +38,44 @@ const c = {
   navy: "#080A1F",
   purple: "#6E49E8",
   violet: "#9A6CFF",
-  blue: "#315BFF",
+  indigo: "#4C42A7",
+  teal: "#008F8A",
+  coral: "#C85162",
+  ochre: "#A66B18",
   cyan: "#18A6B6",
-  green: "#19A86B",
-  amber: "#E49A22",
-  red: "#E84A5F",
 };
 
 type EndpointTone = "blue" | "green" | "red" | "amber";
 
 const tone = {
-  blue: { main: c.blue, gradient: ["#EEF3FF", "#FFFFFF"], panel: "#DFE7FF", chip: "#E9EEFF" },
-  green: { main: c.green, gradient: ["#E9FBF3", "#FFFFFF"], panel: "#D9F6E8", chip: "#E7F8EF" },
-  red: { main: c.red, gradient: ["#FFF0F3", "#FFFFFF"], panel: "#FFE0E7", chip: "#FFE8EC" },
-  amber: { main: c.amber, gradient: ["#FFF5E6", "#FFFFFF"], panel: "#FFECC8", chip: "#FFF1DB" },
+  blue: {
+    main: c.indigo,
+    gradient: ["#F2F0FF", "#FFFFFF"],
+    panel: "#E1DEF9",
+    chip: "#EAE7FF",
+    track: "#DED9F8",
+  },
+  green: {
+    main: c.teal,
+    gradient: ["#EAF8F5", "#FFFFFF"],
+    panel: "#D4F0EA",
+    chip: "#DFF5F0",
+    track: "#D5EFE9",
+  },
+  red: {
+    main: c.coral,
+    gradient: ["#FFF0F2", "#FFFFFF"],
+    panel: "#F9DDE2",
+    chip: "#FCE7EA",
+    track: "#F7D8DE",
+  },
+  amber: {
+    main: c.ochre,
+    gradient: ["#FFF4E3", "#FFFFFF"],
+    panel: "#F7E0B8",
+    chip: "#F9E9CF",
+    track: "#F3DCB4",
+  },
 } as const;
 
 function pct(value: number, total: number) {
@@ -83,7 +107,7 @@ export default function OverviewHomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}
       >
-        <LinearGradient colors={[c.bg, "#F5F3FF", c.bg2]} style={styles.backgroundStage}>
+        <LinearGradient colors={[c.bg, "#F7F3FF", c.bg2]} style={styles.backgroundStage}>
           <View style={styles.headerBar}>
             <View>
               <Text style={styles.hello}>EMA Operations</Text>
@@ -120,7 +144,7 @@ export default function OverviewHomeScreen() {
 
         {error ? (
           <View style={styles.errorCard}>
-            <AlertTriangle size={18} color={c.red} strokeWidth={2.8} />
+            <AlertTriangle size={18} color={c.coral} strokeWidth={2.8} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -237,13 +261,13 @@ function OperationsPulse({
 
         <View style={styles.distributionPanel}>
           <View style={styles.stackTrack}>
-            <View style={[styles.stackSegment, { width: `${onlineWidth}%`, backgroundColor: c.green }]} />
-            <View style={[styles.stackSegment, { width: `${offlineWidth}%`, backgroundColor: c.red }]} />
-            <View style={[styles.stackSegment, { width: `${staleWidth}%`, backgroundColor: c.amber }]} />
+            <View style={[styles.stackSegment, { width: `${onlineWidth}%`, backgroundColor: c.teal }]} />
+            <View style={[styles.stackSegment, { width: `${offlineWidth}%`, backgroundColor: c.coral }]} />
+            <View style={[styles.stackSegment, { width: `${staleWidth}%`, backgroundColor: c.ochre }]} />
           </View>
-          <LegendRow color={c.green} label="Online" value={online} />
-          <LegendRow color={c.red} label="Offline" value={offline} />
-          <LegendRow color={c.amber} label="Stale" value={stale} />
+          <LegendRow color={c.teal} label="Online" value={online} />
+          <LegendRow color={c.coral} label="Offline" value={offline} />
+          <LegendRow color={c.ochre} label="Stale" value={stale} />
         </View>
       </View>
     </View>
@@ -312,7 +336,7 @@ function EndpointActionCard({
             </View>
           </View>
 
-          <View style={styles.progressTrack}>
+          <View style={[styles.progressTrack, { backgroundColor: t.track }]}> 
             <View style={[styles.progressFill, { width: `${safeProgress}%`, backgroundColor: t.main }]} />
           </View>
 
@@ -331,7 +355,7 @@ function EndpointActionCard({
 function TicketPill({ label, value, danger }: { label: string; value: number; danger?: boolean }) {
   return (
     <View style={styles.ticketPill}>
-      <Text style={[styles.ticketPillValue, danger && { color: c.red }]}>{formatNumber(value)}</Text>
+      <Text style={[styles.ticketPillValue, danger && { color: c.coral }]}>{formatNumber(value)}</Text>
       <Text style={styles.ticketPillLabel}>{label}</Text>
     </View>
   );
@@ -402,11 +426,11 @@ const styles = StyleSheet.create({
   pulseHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 13 },
   pulseTitle: { color: c.ink, fontSize: 17, fontWeight: "900", letterSpacing: -0.4 },
   pulseSubtitle: { color: c.soft, fontSize: 10.5, fontWeight: "700", marginTop: 3 },
-  criticalBadge: { color: c.red, backgroundColor: "#FFE6EC", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, fontSize: 10, fontWeight: "900" },
-  healthyBadge: { color: c.green, backgroundColor: "#E7F8EF", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, fontSize: 10, fontWeight: "900" },
+  criticalBadge: { color: c.coral, backgroundColor: "#FCE7EA", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, fontSize: 10, fontWeight: "900" },
+  healthyBadge: { color: c.teal, backgroundColor: "#DFF5F0", paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, fontSize: 10, fontWeight: "900" },
   pulseBody: { flexDirection: "row", gap: 12, alignItems: "center" },
-  coverageDial: { width: 96, minHeight: 104, borderRadius: 24, backgroundColor: "#F6F4FF", alignItems: "center", justifyContent: "center", padding: 12 },
-  coverageValue: { color: c.purple, fontSize: 30, fontWeight: "900", letterSpacing: -1 },
+  coverageDial: { width: 96, minHeight: 104, borderRadius: 24, backgroundColor: "#F4F1FF", alignItems: "center", justifyContent: "center", padding: 12 },
+  coverageValue: { color: c.indigo, fontSize: 30, fontWeight: "900", letterSpacing: -1 },
   coverageLabel: { color: c.soft, fontSize: 9.5, fontWeight: "800", marginTop: 4, textAlign: "center" },
   distributionPanel: { flex: 1 },
   stackTrack: { height: 18, borderRadius: 99, overflow: "hidden", backgroundColor: "#EEF1F8", flexDirection: "row", marginBottom: 11 },
@@ -430,7 +454,7 @@ const styles = StyleSheet.create({
   sectionTitleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 12 },
   sectionLabel: { color: c.ink, fontSize: 20, fontWeight: "900", letterSpacing: -0.5 },
   sectionCaption: { color: c.soft, fontSize: 11, fontWeight: "700", marginTop: 3 },
-  sectionCount: { color: c.purple, fontSize: 16, fontWeight: "900" },
+  sectionCount: { color: c.indigo, fontSize: 16, fontWeight: "900" },
   endpointCardOuter: { marginBottom: 12, borderRadius: 26, shadowColor: "#7460AE", shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 2 },
   endpointCard: { borderRadius: 26, padding: 10, minHeight: 120, flexDirection: "row", borderWidth: 1, borderColor: "rgba(255,255,255,0.85)" },
   iconColumn: { width: 74, borderRadius: 22, alignItems: "center", justifyContent: "center", marginRight: 12, overflow: "hidden" },
