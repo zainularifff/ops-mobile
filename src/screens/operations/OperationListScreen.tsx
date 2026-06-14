@@ -24,7 +24,7 @@ import { colors } from "../../theme/colors";
 import {
   operationModules,
   OperationModuleKey,
-} from "../../data/operations";
+} from "../../config/operationModules";
 
 import {
   dynamicBackgroundStyle,
@@ -144,8 +144,8 @@ export default function OperationListScreen() {
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Selected Records</Text>
           <Text style={styles.summaryDesc}>
-            Mobile preview now uses live worklist records related to this
-            operational module.
+            Mobile preview uses live worklist records related to this operational
+            module.
           </Text>
 
           {loading ? <ActivityIndicator size="small" color={moduleConfig.color} /> : null}
