@@ -1,4 +1,4 @@
-import { API_BASE_URL, API_TIMEOUT_MS } from "../config/api";
+import { API_BASE_URL, API_CONFIG_ERROR, API_TIMEOUT_MS } from "../config/api";
 import { clearSessionToken, getSessionToken } from "./secureStorage";
 
 type ApiMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
@@ -22,8 +22,20 @@ export class ApiError extends Error {
   }
 }
 
+function ensureApiConfigured(endpoint: string) {
+  if (!API_CONFIG_ERROR) return;
+
+  throw new ApiError(API_CONFIG_ERROR, 0, {
+    code: "API_CONFIG_MISSING",
+    endpoint,
+    baseUrl: API_BASE_URL || null,
+  });
+}
+
 function buildApiUrl(endpoint: string) {
   if (/^https?:\/\//i.test(endpoint)) return endpoint;
+
+  ensureApiConfigured(endpoint);
 
   const normalizedEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
   return `${API_BASE_URL}${normalizedEndpoint}`;
@@ -43,10 +55,10 @@ async function readJsonSafely(response: Response) {
 
 function buildNetworkErrorMessage(error: any) {
   if (error?.name === "AbortError") {
-    return `Connection timed out. Please ensure the backend is running and reachable at ${API_BASE_URL}.`;
+    return `Connection timed out. Backend is not reachable at configured URL: ${API_BASE_URL}.`;
   }
 
-  return `Cannot connect to server at ${API_BASE_URL}. Please check backend service, network, firewall, and Android emulator/device access.`;
+  return `Cannot connect to configured backend URL: ${API_BASE_URL}. Check backend service, network, firewall, and device access.`;
 }
 
 export async function apiRequest<T = any>(
@@ -83,6 +95,7 @@ export async function apiRequest<T = any>(
     });
   } catch (error: any) {
     throw new ApiError(buildNetworkErrorMessage(error), 0, {
+      code: error?.name === "AbortError" ? "API_TIMEOUT" : "API_CONNECTION_FAILED",
       endpoint,
       baseUrl: API_BASE_URL,
       originalError: error?.message || String(error),
@@ -103,7 +116,12 @@ export async function apiRequest<T = any>(
       payload?.error ||
       `Request failed with status ${response.status}`;
 
-    throw new ApiError(message, response.status, payload);
+    throw new ApiError(message, response.status, {
+      code: payload?.code || `HTTP_${response.status}`,
+      endpoint,
+      baseUrl: API_BASE_URL,
+      payload,
+    });
   }
 
   return payload as T;
