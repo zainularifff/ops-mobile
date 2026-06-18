@@ -40,6 +40,7 @@
     },
     "plugins": [
       "expo-secure-store",
+      "./plugins/withAndroidNetworkSecurity",
       [
         "expo-local-authentication",
         {
@@ -48,7 +49,7 @@
       ]
     ],
     "extra": {
-      "apiBaseUrl": "http://192.168.100.75:3001",
+      "apiBaseUrl": "http://192.168.140.66:3001",
       "eas": {
         "projectId": "7cd7294a-919e-49ee-ad94-f714c7036209"
       }
